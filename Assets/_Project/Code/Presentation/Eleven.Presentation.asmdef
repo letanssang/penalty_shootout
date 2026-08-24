@@ -1,0 +1,22 @@
+{
+    "name": "Eleven.Presentation",
+    "rootNamespace": "Eleven.Presentation",
+    "references": [
+        "Eleven.Ball",
+        "Eleven.Keeper",
+        "Eleven.Shooter",
+        "Eleven.Match",
+        "Unity.Mathematics",
+        "Unity.Collections",
+        "Unity.Burst"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

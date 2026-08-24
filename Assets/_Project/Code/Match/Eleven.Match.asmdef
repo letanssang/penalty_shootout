@@ -1,0 +1,21 @@
+{
+    "name": "Eleven.Match",
+    "rootNamespace": "Eleven.Match",
+    "references": [
+        "Eleven.Ball",
+        "Eleven.Keeper",
+        "Eleven.Shooter",
+        "Unity.Mathematics",
+        "Unity.Collections",
+        "Unity.Burst"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

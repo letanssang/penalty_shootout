@@ -1,0 +1,20 @@
+{
+    "name": "Eleven.UI",
+    "rootNamespace": "Eleven.UI",
+    "references": [
+        "Eleven.Match",
+        "Eleven.Presentation",
+        "Unity.Mathematics",
+        "Unity.Collections",
+        "Unity.Burst"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
