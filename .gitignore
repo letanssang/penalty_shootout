@@ -1,0 +1,50 @@
+# Unity generated
+/[Ll]ibrary/
+/[Tt]emp/
+/[Oo]bj/
+/[Bb]uild/
+/[Bb]uilds/
+/[Ll]ogs/
+/[Uu]ser[Ss]ettings/
+[Mm]emoryCaptures/
+
+# Visual Studio / Rider / VS Code
+*.csproj
+*.sln
+*.user
+*.userprefs
+.vs/
+.idea/
+*.pidb
+*.booproj
+*.suo
+*.svd
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+
+# Unity crash reports
+sysinfo.txt
+*.stackdump
+crashlytics-build.properties
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Builds
+*.apk
+*.aab
+*.ipa
+*.unitypackage
+*.app/
+
+# Xcode generated (iOS build output)
+ios_build/
+
+# Gradle generated (Android build output)
+android_build/
+
+# PerfHud CSV captures pulled from devices
+captures/
