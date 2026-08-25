@@ -48,3 +48,6 @@ android_build/
 
 # PerfHud CSV captures pulled from devices
 captures/
+
+# Build log của tools/build.sh
+build_*.log

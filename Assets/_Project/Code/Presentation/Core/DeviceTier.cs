@@ -89,11 +89,18 @@ namespace Eleven.Core
         public static void Apply(QualityTier tier)
         {
             bool changed = !initialized || current != tier;
+            initialized = true;   // nếu không đặt ở đây, mọi Apply đều coi là "đổi" và bắn sự kiện lặp
             current = tier;
             CurrentProfile = profiles != null && profiles.Length == 3 ? profiles[(int)tier] : null;
 
             // Mỗi quality level trỏ đúng một URP asset — đổi level là đổi pipeline asset.
-            QualitySettings.SetQualityLevel((int)tier, true);
+            // Trước khi chạy Generate Tier Assets thì chưa có đủ 3 level; SetQualityLevel ngoài
+            // phạm vi sẽ ném lỗi, nên bỏ qua và chỉ cảnh báo.
+            if ((int)tier < QualitySettings.names.Length)
+                QualitySettings.SetQualityLevel((int)tier, true);
+            else
+                Debug.LogWarning($"[DeviceTier] Chưa có quality level cho bậc {tier} — " +
+                                 "chạy menu Eleven > Phase 0 > Generate Tier Assets.");
             if (CurrentProfile != null)
                 Application.targetFrameRate = CurrentProfile.targetFrameRate;
 

@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using UnityEditor;
+using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -62,7 +63,9 @@ namespace Eleven.Editor.BuildPipeline
             };
 
             var stopwatch = Stopwatch.StartNew();
-            BuildReport report = BuildPipeline.BuildPlayer(options);
+            // Tên namespace Eleven.Editor.BuildPipeline che khuất UnityEditor.BuildPipeline —
+            // phải gọi đủ đường dẫn, nếu không trình biên dịch tìm BuildPlayer trong namespace này.
+            BuildReport report = UnityEditor.BuildPipeline.BuildPlayer(options);
             stopwatch.Stop();
 
             if (report.summary.result != BuildResult.Succeeded)
@@ -80,14 +83,16 @@ namespace Eleven.Editor.BuildPipeline
         static void ConfigurePlayer(BuildTarget target)
         {
             // IL2CPP + Release cho cả hai nền tảng.
-            PlayerSettings.SetIl2CppCompilerConfiguration(
-                target == BuildTarget.Android ? BuildTargetGroup.Android : BuildTargetGroup.iOS,
-                Il2CppCompilerConfiguration.Release);
+            // Dùng NamedBuildTarget: các overload nhận BuildTargetGroup đã bị đánh dấu obsolete ở Unity 6.
+            var named = target == BuildTarget.Android
+                ? NamedBuildTarget.Android
+                : NamedBuildTarget.iOS;
+            PlayerSettings.SetIl2CppCompilerConfiguration(named, Il2CppCompilerConfiguration.Release);
             PlayerSettings.stripEngineCode = true;
 
             if (target == BuildTarget.Android)
             {
-                PlayerSettings.SetScriptingBackend(BuildTargetGroup.Android, ScriptingImplementation.IL2CPP);
+                PlayerSettings.SetScriptingBackend(named, ScriptingImplementation.IL2CPP);
                 PlayerSettings.Android.targetArchitectures = AndroidArchitecture.ARM64; // bỏ ARMv7
 
                 // Vulkan duy nhất — GLES3 bị gỡ khỏi danh sách API.
@@ -99,13 +104,14 @@ namespace Eleven.Editor.BuildPipeline
             }
             else if (target == BuildTarget.iOS)
             {
-                PlayerSettings.SetScriptingBackend(BuildTargetGroup.iOS, ScriptingImplementation.IL2CPP);
+                PlayerSettings.SetScriptingBackend(named, ScriptingImplementation.IL2CPP);
                 // Metal duy nhất cho iOS.
                 PlayerSettings.SetUseDefaultGraphicsAPIs(BuildTarget.iOS, false);
                 PlayerSettings.SetGraphicsAPIs(BuildTarget.iOS, new[] { GraphicsDeviceType.Metal });
 
-                EditorUserBuildSettings.symlinkLibraries = true; // vòng lặp build Xcode nhanh hơn
-                EditorUserBuildSettings.iOSBuildConfigType = iOSBuildConfigType.Release;
+                EditorUserBuildSettings.symlinkSources = true; // vòng lặp build Xcode nhanh hơn
+                // iOSBuildConfigType đã bị gỡ ở Unity 6; tên mới là iOSXcodeBuildConfig + enum XcodeBuildConfig.
+                EditorUserBuildSettings.iOSXcodeBuildConfig = XcodeBuildConfig.Release;
             }
 
             // Nhúng git commit hash: hiện trong HUD qua Application.version.

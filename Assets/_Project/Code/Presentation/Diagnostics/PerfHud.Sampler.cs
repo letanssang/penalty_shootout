@@ -1,3 +1,5 @@
+using Unity.Profiling;
+using UnityEngine;
 
 namespace Eleven.Core.Diagnostics
 {
@@ -32,14 +34,15 @@ namespace Eleven.Core.Diagnostics
         void Update()
         {
             FrameTimingManager.CaptureFrameTimings();
-            int got = FrameTimingManager.GetLatestTimings(1, frameTimings);
+            // GetLatestTimings trả uint — gán thẳng vào int là lỗi biên dịch.
+            uint got = FrameTimingManager.GetLatestTimings(1, frameTimings);
 
             float cpuMain = 0f, cpuRender = 0f, gpu = 0f, total;
             if (got > 0)
             {
                 var t = frameTimings[0];
-                cpuMain = (float)t.cpuMainThreadPresentTime;
-                cpuRender = (float)t.cpuRenderThreadPresentTime;
+                cpuMain = (float)t.cpuMainThreadFrameTime;
+                cpuRender = (float)t.cpuRenderThreadFrameTime;
                 gpu = (float)t.gpuFrameTime;
                 total = Mathf.Max(gpu, Time.unscaledDeltaTime * 1000f);
             }

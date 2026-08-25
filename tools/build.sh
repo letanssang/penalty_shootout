@@ -43,8 +43,10 @@ ARGS=(-batchmode -nographics -quit
 [[ -n "$OUTPUT" ]] && ARGS+=(-outputPath "$OUTPUT")
 
 echo "Bắt đầu build $TARGET (log: $LOG_FILE)..."
-"$UNITY_BIN" "${ARGS[@]}"
-EXIT_CODE=$?
+# 'set -e' sẽ thoát ngay khi Unity trả mã khác 0, nên nhánh in log bên dưới không bao giờ chạy.
+# '|| EXIT_CODE=$?' giữ lại quyền kiểm soát để còn trích được lỗi ra màn hình.
+EXIT_CODE=0
+"$UNITY_BIN" "${ARGS[@]}" || EXIT_CODE=$?
 
 if [[ $EXIT_CODE -ne 0 ]]; then
     echo "BUILD THẤT BẠI (exit code $EXIT_CODE). Xem log:" >&2

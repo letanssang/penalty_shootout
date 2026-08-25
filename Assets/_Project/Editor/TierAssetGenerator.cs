@@ -108,31 +108,82 @@ namespace Eleven.Editor.Tools
             return p;
         }
 
+        /// <summary>
+        /// Dựng đúng 3 quality level TierA/B/C ở chỉ số 0/1/2.
+        /// Unity 6 KHÔNG có QualitySettings.AddCustomLevel/DeleteCustomLevel — danh sách quality level
+        /// chỉ sửa được qua SerializedObject của ProjectSettings/QualitySettings.asset.
+        /// </summary>
         static void ApplyQualityLevels(TierProfile[] profiles, UniversalRenderPipelineAsset[] urpAssets)
         {
             string[] names = { "TierA", "TierB", "TierC" };
 
-            // Xoá level cũ cùng tên để chạy lại không sinh rác.
-            var existingNames = QualitySettings.names;
-            for (int i = existingNames.Length - 1; i >= 0; i--)
-                if (System.Array.IndexOf(names, existingNames[i]) >= 0)
-                    QualitySettings.DeleteCustomLevel(i);
+            var so = new SerializedObject(QualitySettings.GetQualitySettings());
+            var levels = so.FindProperty("m_QualitySettings");
+            if (levels == null || !levels.isArray)
+            {
+                Debug.LogError("[TierAssetGenerator] Không đọc được m_QualitySettings — bỏ qua bước quality level.");
+                return;
+            }
+
+            // Cắt/nhân bản về đúng 3 phần tử. Không ClearArray: phần tử chèn vào mảng rỗng
+            // thiếu giá trị mặc định; resize giữ nguyên các field đã hợp lệ của Unity.
+            if (levels.arraySize == 0)
+                levels.InsertArrayElementAtIndex(0);
+            levels.arraySize = 3;
 
             for (int i = 0; i < 3; i++)
             {
-                int idx = QualitySettings.AddCustomLevel(names[i]);
-                QualitySettings.SetQualityLevel(idx, false);
-                QualitySettings.renderPipeline = urpAssets[i]; // URP asset gắn với level này
-                QualitySettings.vSyncCount = 0;                 // tự quản targetFrameRate
+                var lv = levels.GetArrayElementAtIndex(i);
+                SetString(lv, "name", names[i]);
+                SetObject(lv, "customRenderPipeline", urpAssets[i]);
+                SetInt(lv, "vSyncCount", 0);           // tự quản bằng targetFrameRate của TierProfile
+                var excluded = lv.FindPropertyRelative("excludedTargetPlatforms");
+                if (excluded != null && excluded.isArray)
+                    excluded.ClearArray();             // cả 3 bậc dùng được trên mọi nền tảng
             }
 
-            // Mặc định mở project ở bậc A để đo đường cơ sở.
-            QualitySettings.SetQualityLevel(0, false);
+            // Chỉ số mặc định mỗi nền tảng còn trỏ tới các level cũ (5, 2...) — nay ngoài phạm vi.
+            var perPlatform = so.FindProperty("m_PerPlatformDefaultQuality");
+            if (perPlatform != null && perPlatform.isArray)
+            {
+                for (int i = 0; i < perPlatform.arraySize; i++)
+                {
+                    var pair = perPlatform.GetArrayElementAtIndex(i);
+                    var value = pair.FindPropertyRelative("second");
+                    if (value != null && value.propertyType == SerializedPropertyType.Integer)
+                        value.intValue = Mathf.Clamp(value.intValue, 0, 2);
+                }
+            }
 
-            // Đặt DeviceTier khởi động theo bậc A; runtime sẽ Detect() và Apply() lại.
-            var bootstrapProfiles = profiles;
-            Debug.Log($"[TierAssetGenerator] Quality levels: {string.Join(", ", names)} — " +
-                      $"profile A/B/C: {bootstrapProfiles[0].name}, {bootstrapProfiles[1].name}, {bootstrapProfiles[2].name}");
+            // Mở project ở bậc A để đo đường cơ sở; runtime sẽ Detect() và Apply() lại.
+            var current = so.FindProperty("m_CurrentQuality");
+            if (current != null)
+                current.intValue = 0;
+
+            so.ApplyModifiedPropertiesWithoutUndo();
+
+            Debug.Log($"[TierAssetGenerator] Quality levels: {string.Join(", ", QualitySettings.names)} — " +
+                      $"profile A/B/C: {profiles[0].name}, {profiles[1].name}, {profiles[2].name}");
+        }
+
+        static void SetString(SerializedProperty parent, string name, string value)
+        {
+            var p = parent.FindPropertyRelative(name);
+            if (p != null) p.stringValue = value;
+            else Debug.LogWarning($"[TierAssetGenerator] Không tìm thấy field '{name}' trong quality level.");
+        }
+
+        static void SetInt(SerializedProperty parent, string name, int value)
+        {
+            var p = parent.FindPropertyRelative(name);
+            if (p != null) p.intValue = value;
+        }
+
+        static void SetObject(SerializedProperty parent, string name, Object value)
+        {
+            var p = parent.FindPropertyRelative(name);
+            if (p != null) p.objectReferenceValue = value;
+            else Debug.LogWarning($"[TierAssetGenerator] Không tìm thấy field '{name}' trong quality level.");
         }
     }
 }
