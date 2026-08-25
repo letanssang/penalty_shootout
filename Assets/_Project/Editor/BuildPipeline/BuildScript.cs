@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Globalization;
 using UnityEditor;
 using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
@@ -115,10 +116,34 @@ namespace Eleven.Editor.BuildPipeline
             }
 
             // Nhúng git commit hash: hiện trong HUD qua Application.version.
+            //
+            // iOS không chịu chuỗi "0.1.0+012ead8". CFBundleShortVersionString bị ép
+            // "chỉ gồm số và dấu '.', bắt đầu và kết thúc bằng số, tối đa 18 ký tự" —
+            // gắn hash hex vào là build chết ngay ở khâu kiểm tra PlayerSettings
+            // (UnityException: iOS Version has not been set up correctly). Android thì
+            // không hề kêu ca, nên lỗi này chỉ lộ ra khi build thật cho iOS.
+            //
+            // Hash vốn là hex nên đổi sang thập phân: hợp lệ với iOS, không mất thông
+            // tin, và vẫn hiện trong HUD đúng như hợp đồng T05 đòi. Đọc ngược bằng:
+            //     printf '%x\n' <số cuối trong chuỗi phiên bản>
             string hash = GetCommitShortHash();
             if (!string.IsNullOrEmpty(hash))
-                PlayerSettings.bundleVersion = $"0.1.0+{hash}";
+            {
+                if (target == BuildTarget.iOS)
+                {
+                    PlayerSettings.bundleVersion =
+                        ulong.TryParse(hash, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out ulong n)
+                            ? $"{BaseVersion}.{n}"
+                            : BaseVersion;
+                }
+                else
+                {
+                    PlayerSettings.bundleVersion = $"{BaseVersion}+{hash}";
+                }
+            }
         }
+
+        const string BaseVersion = "0.1.0";
 
         /// <summary>Đọc commit hash từ git CLI; nếu thất bại trả chuỗi rỗng chứ không chặn build.</summary>
         public static string GetCommitShortHash()
