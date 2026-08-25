@@ -11,6 +11,7 @@
 # Visual Studio / Rider / VS Code
 *.csproj
 *.sln
+*.slnx
 *.user
 *.userprefs
 .vs/
@@ -56,3 +57,6 @@ tier*.log
 boot.log
 tests*.log
 results.xml
+devtests.log
+device-results.xml
+.utmp/

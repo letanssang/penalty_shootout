@@ -6,6 +6,10 @@
         "Eleven.Keeper",
         "Eleven.Shooter",
         "Eleven.Match",
+        "Eleven.Presentation",
+        "Unity.Mathematics",
+        "Unity.Collections",
+        "Unity.Burst",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],

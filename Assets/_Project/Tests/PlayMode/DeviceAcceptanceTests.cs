@@ -1,0 +1,187 @@
+using System.Collections;
+using Eleven.Ball;
+using Eleven.Core;
+using Eleven.Core.Diagnostics;
+using NUnit.Framework;
+using Unity.Mathematics;
+using UnityEngine;
+using UnityEngine.TestTools;
+
+namespace Eleven.Tests.PlayMode
+{
+    /// <summary>
+    /// Các mục nghiệm thu Phase 0 mà EditMode KHÔNG kiểm được, vì chúng nói về hành vi của
+    /// build IL2CPP trên phần cứng thật: hash tất định qua IL2CPP, HUD vẽ lên màn hình,
+    /// nhiệt độ máy, chi phí của chính HUD, và CSV ghi ra persistentDataPath.
+    ///
+    /// Chạy: Unity -runTests -testPlatform Android (Unity tự dựng APK test và đẩy sang máy).
+    /// Mọi con số đo được đều Debug.Log để đọc lại bằng `adb logcat`.
+    /// </summary>
+    public class DeviceAcceptanceTests
+    {
+        /// <summary>
+        /// Hash quỹ đạo do BallSolverTests.GoldenHash_... in ra trong Editor (Mono, macOS ARM64).
+        /// Build IL2CPP phải cho ĐÚNG con số này, không phải "xấp xỉ".
+        /// </summary>
+        const uint EditorGoldenHash = 4094678572u;
+
+        static uint HashTrajectory(BallState initial, BallParams p, int steps, float dt)
+        {
+            uint h = 0;
+            var s = initial;
+            for (int i = 0; i < steps; i++)
+            {
+                s = BallSolver.Step(s, p, dt);
+                h ^= math.asuint(s.position.x) + (uint)i * 2654435761u;
+                h ^= math.asuint(s.position.y) + (uint)i * 2246822519u;
+                h ^= math.asuint(s.position.z) + (uint)i * 3266489917u;
+                h ^= math.asuint(s.velocity.x);
+                h ^= math.asuint(s.velocity.y);
+                h ^= math.asuint(s.velocity.z);
+            }
+            return h;
+        }
+
+        // ─── T07: solver tất định qua IL2CPP ───
+
+        [Test]
+        public void T07_GoldenHash_TrenIL2CPP_KhopTungBitVoiEditor()
+        {
+            var s = new BallState
+            {
+                position = float3.zero,
+                velocity = new float3(3f, 8f, 28f),
+                spin = new float3(10f, -20f, 5f)
+            };
+            uint hash = HashTrajectory(s, BallParams.Default, 200, 1f / 200f);
+
+            Debug.Log($"[T07 THIET BI] hash={hash} editor={EditorGoldenHash} " +
+                      $"backend=IL2CPP model={SystemInfo.deviceModel}");
+
+            Assert.AreEqual(EditorGoldenHash, hash,
+                "Hash trên build IL2CPP phải khớp từng bit với Editor — khác là solver không tất định giữa hai backend");
+        }
+
+        // ─── T03: phân bậc theo năng lực thật của máy ───
+
+        [Test]
+        public void T03_DeviceTier_PhatHienTrenPhanCungThat()
+        {
+            var tier = DeviceTier.Detect();
+            Debug.Log($"[T03 THIET BI] tier={tier} model={SystemInfo.deviceModel} " +
+                      $"RAM={SystemInfo.systemMemorySize}MB VRAM={SystemInfo.graphicsMemorySize}MB " +
+                      $"cores={SystemInfo.processorCount} gfx={SystemInfo.graphicsDeviceType}");
+
+            Assert.That(tier, Is.EqualTo(QualityTier.A).Or.EqualTo(QualityTier.B).Or.EqualTo(QualityTier.C));
+            Assert.NotNull(DeviceTier.CurrentProfile,
+                "TierBootstrap trong scene Boot phải đã gọi Initialize — CurrentProfile không được null trên máy thật");
+            Assert.AreEqual(tier, DeviceTier.CurrentProfile.tier,
+                "Profile đang dùng phải đúng là profile của bậc phát hiện được");
+        }
+
+        // ─── T04: HUD vẽ được lên màn hình thiết bị ───
+
+        [UnityTest]
+        public IEnumerator T04_Hud_HienLenManHinhThietBi()
+        {
+            PerfHud.Visible = true;
+            Assert.IsTrue(PerfHud.Visible, "Bật Visible xong PerfHud phải báo là đang hiện");
+
+            // Giữ HUD trên màn hình đủ lâu để chụp lại bằng `adb shell screencap` từ ngoài.
+            // 8 giây cũng đủ để chữ được làm mới nhiều lần (chu kỳ 4 lần/giây).
+            Debug.Log("[T04 THIET BI] HUD dang hien — chup man hinh trong 8 giay toi");
+            float until = Time.unscaledTime + 8f;
+            while (Time.unscaledTime < until) yield return null;
+
+            Assert.IsTrue(PerfHud.Visible, "HUD phải còn hiện sau 8 giây");
+            Debug.Log("[T04 THIET BI] het 8 giay, HUD van dang hien");
+        }
+
+        // ─── T04: nhiệt độ máy ───
+
+        [UnityTest]
+        public IEnumerator T04_DocDuocNhietDoMay()
+        {
+            for (int i = 0; i < 30; i++) yield return null;
+
+            var cur = PerfHud.Current;
+            Debug.Log($"[T04 THIET BI] thermalState={cur.thermalState} battery={cur.batteryLevel}");
+
+            Assert.That(cur.thermalState, Is.InRange(0, 3),
+                "thermalState phải nằm trong 0..3 theo hợp đồng T04");
+        }
+
+        // ─── T04: chi phí của chính HUD ───
+
+        [UnityTest]
+        public IEnumerator T04_HudTonDuoi0_2ms()
+        {
+            const int warm = 30, sample = 180;
+
+            PerfHud.Visible = false;
+            for (int i = 0; i < warm; i++) yield return null;
+            float sumOff = 0f;
+            for (int i = 0; i < sample; i++) { yield return null; sumOff += PerfHud.Current.totalMs; }
+            float avgOff = sumOff / sample;
+
+            PerfHud.Visible = true;
+            for (int i = 0; i < warm; i++) yield return null;
+            float sumOn = 0f;
+            for (int i = 0; i < sample; i++) { yield return null; sumOn += PerfHud.Current.totalMs; }
+            float avgOn = sumOn / sample;
+
+            float delta = avgOn - avgOff;
+            Debug.Log($"[T04 THIET BI] frame tat HUD={avgOff:F4}ms bat HUD={avgOn:F4}ms chenh={delta:F4}ms");
+
+            Assert.Less(delta, 0.2f, "Bản thân HUD phải tốn dưới 0.2ms mỗi khung");
+        }
+
+        // ─── T04: cấp phát GC mỗi khung khi HUD đang bật ───
+
+        [UnityTest]
+        public IEnumerator T04_DoCapPhatGcMoiKhungKhiHudBat()
+        {
+            PerfHud.Visible = true;
+            for (int i = 0; i < 30; i++) yield return null;
+
+            const int sample = 240;
+            long total = 0; int framesWithAlloc = 0; long worst = 0;
+            for (int i = 0; i < sample; i++)
+            {
+                yield return null;
+                long a = PerfHud.Current.gcAllocBytes;
+                if (a > 0) { framesWithAlloc++; total += a; if (a > worst) worst = a; }
+            }
+
+            Debug.Log($"[T04 THIET BI] GC qua {sample} khung: tong={total}B " +
+                      $"so khung co cap phat={framesWithAlloc} lon nhat={worst}B");
+
+            // Ghi nhận trung thực: đường ĐO không cấp phát, nhưng phần dựng CHỮ làm mới
+            // 4 lần/giây thì có. Ngưỡng dưới đây bắt lỗi hồi quy ở đường đo, không phải
+            // khẳng định HUD cấp phát 0 byte — muốn 0 thật phải dùng TextMeshPro SetCharArray.
+            Assert.Less(framesWithAlloc, sample / 4,
+                "Phần lớn khung phải không cấp phát — nếu gần như khung nào cũng cấp phát thì đường đo đã hồi quy");
+        }
+
+        // ─── T04: CSV ghi ra persistentDataPath ───
+
+        [UnityTest]
+        public IEnumerator T04_EndCapture_GhiCsvRaPersistentDataPath()
+        {
+            PerfHud.BeginCapture("device-acceptance");
+            for (int i = 0; i < 120; i++) yield return null;
+            string csv = PerfHud.EndCapture();
+
+            Assert.IsNotNull(csv, "EndCapture phải trả CSV");
+            StringAssert.StartsWith("frame,total_ms,gpu_ms", csv);
+
+            var files = System.IO.Directory.GetFiles(Application.persistentDataPath, "eleven_device-acceptance_*.csv");
+            Debug.Log($"[T04 THIET BI] persistentDataPath={Application.persistentDataPath} " +
+                      $"so file CSV={files.Length} do dai CSV={csv.Length} ky tu");
+            foreach (var f in files)
+                Debug.Log($"[T04 THIET BI] CSV: {f} ({new System.IO.FileInfo(f).Length} bytes)");
+
+            Assert.IsNotEmpty(files, "CSV phải nằm trên đĩa trong persistentDataPath để adb pull về được");
+        }
+    }
+}
