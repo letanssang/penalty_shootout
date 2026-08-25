@@ -79,6 +79,59 @@ namespace Eleven.Tests.PlayMode
                 "Profile đang dùng phải đúng là profile của bậc phát hiện được");
         }
 
+        // ─── T03: đổi bậc lúc chạy — không crash, không rò render texture ───
+
+        /// <summary>
+        /// Ô nghiệm thu T03 "đổi bậc lúc chạy không crash, không rò render texture".
+        ///
+        /// Không cần Profiler có giao diện: đổi bậc là URP đổi pipeline asset, và mọi
+        /// render texture của bậc cũ phải được thu hồi. Nếu rò, số RenderTexture còn
+        /// sống sẽ TĂNG DẦN sau mỗi vòng — nên ta quay 12 vòng qua A→B→C rồi so số đếm
+        /// ở cùng một bậc giữa vòng đầu và vòng cuối. Cùng bậc thì số phải xấp xỉ bằng
+        /// nhau; chỉ khi rò nó mới leo lên.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator T03_DoiBacLucChay_KhongCrash_KhongRoRenderTexture()
+        {
+            bool coOverride = PlayerPrefs.HasKey(DeviceTier.OverrideKey);
+            int overrideCu = PlayerPrefs.GetInt(DeviceTier.OverrideKey, -1);
+
+            const int soVong = 12; // 4 lượt đầy đủ qua cả ba bậc
+            var dem = new int[soVong];
+            var bacDo = new QualityTier[soVong];
+            bool lechBac = false;
+
+            for (int v = 0; v < soVong; v++)
+            {
+                var bac = (QualityTier)(v % 3);
+                PlayerPrefs.SetInt(DeviceTier.OverrideKey, (int)bac);
+                DeviceTier.RefreshOverride();
+
+                // Đủ khung để URP giải phóng render texture của bậc cũ và dựng bậc mới.
+                for (int i = 0; i < 12; i++) yield return null;
+
+                bacDo[v] = DeviceTier.Current;
+                if (bacDo[v] != bac) lechBac = true;
+                dem[v] = Resources.FindObjectsOfTypeAll<RenderTexture>().Length;
+                Debug.Log($"[T03 THIET BI] vong={v} bac={bac} thuc te={bacDo[v]} renderTexture={dem[v]}");
+            }
+
+            // Trả PlayerPrefs về nguyên trạng TRƯỚC khi assert, để test hỏng cũng không
+            // để lại bậc ép cho các test chạy sau.
+            if (coOverride) PlayerPrefs.SetInt(DeviceTier.OverrideKey, overrideCu);
+            else PlayerPrefs.DeleteKey(DeviceTier.OverrideKey);
+            DeviceTier.RefreshOverride();
+
+            int dauA = dem[0];   // bậc A, lượt 1
+            int cuoiA = dem[9];  // bậc A, lượt 4
+            Debug.Log($"[T03 THIET BI] doi bac {soVong} lan xong — renderTexture bac A: " +
+                      $"luot dau={dauA} luot cuoi={cuoiA} chenh={cuoiA - dauA}");
+
+            Assert.IsFalse(lechBac, "Mỗi lần RefreshOverride xong, DeviceTier.Current phải đúng bậc vừa ép");
+            Assert.LessOrEqual(cuoiA - dauA, 2,
+                $"Rò render texture: cùng bậc A mà sau 4 lượt đổi bậc số RT tăng từ {dauA} lên {cuoiA}");
+        }
+
         // ─── T04: HUD vẽ được lên màn hình thiết bị ───
 
         [UnityTest]
