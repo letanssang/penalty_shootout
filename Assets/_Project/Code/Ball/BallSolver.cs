@@ -13,6 +13,13 @@ namespace Eleven.Ball
     ///
     /// Tích phân RK4 cho hệ (vị trí, vận tốc). KHÔNG dùng Euler tiến: ở dt 1/120 với gia tốc
     /// cản ~9 m/s^2, Euler tích luỹ sai số bậc nhất đủ để lệch điểm chạm khung thành vài cm.
+    ///
+    /// [BurstCompile] chỉ đặt ở cấp class, TUYỆT ĐỐI KHÔNG đặt lên từng method. Gắn lên method
+    /// là bật Direct Call — Burst phải sinh một stub gọi được từ managed, mà ABI của stub đó
+    /// cấm truyền/trả struct và vector theo giá trị (BC1064/BC1067). Cả bốn hàm dưới đây đều
+    /// trả BallState hoặc float3 theo giá trị, nên gắn vào là hỏng AOT lúc build player.
+    /// Attribute cấp class đủ để Burst nhận diện kiểu; thân hàm được compile khi các job ở
+    /// T08/T20 gọi vào và inline chúng, đúng như hợp đồng T06 mô tả.
     /// </summary>
     [BurstCompile]
     public static class BallSolver
@@ -25,7 +32,6 @@ namespace Eleven.Ball
         /// đầu, khớp với đạo hàm 0 của hai đoạn hằng hai bên. Lerp thẳng làm đạo hàm nhảy
         /// bậc tại đúng hai ngưỡng, và cú sút nào đi qua vùng đó cũng bị giật gia tốc.
         /// </summary>
-        [BurstCompile]
         public static float DragCoefficient(float speed, in BallParams p)
         {
             float span = p.cdVHigh - p.cdVLow;
@@ -43,7 +49,6 @@ namespace Eleven.Ball
         /// Gia tốc tại một vận tốc và một xoáy cho trước. Chỉ phụ thuộc vận tốc và xoáy,
         /// không phụ thuộc vị trí — nhờ đó RK4 bên dưới đúng mà không cần lấy mẫu vị trí.
         /// </summary>
-        [BurstCompile]
         static float3 Acceleration(in float3 velocity, in float3 spin, in BallParams p)
         {
             // Tính thẳng từ field thay vì gọi p.CrossSectionArea: gọi property trên tham số 'in'
@@ -73,7 +78,6 @@ namespace Eleven.Ball
         /// ở dt 1/120 với k ~ 0.045/s, sai khác do coi hằng là dưới 4e-4 — nhỏ hơn nhiều
         /// so với sai số của chính mô hình khí động.
         /// </summary>
-        [BurstCompile]
         public static BallState Step(in BallState s, in BallParams p, float dt)
         {
             float3 x0 = s.position;
@@ -113,7 +117,6 @@ namespace Eleven.Ball
         /// Step đúng N lần. Ở đây totalTime = N*dt cho ra ĐÚNG N bước, trùng từng bit.
         /// Phần dư (nếu totalTime không chia hết cho dt) đi thành một bước ngắn cuối cùng.
         /// </summary>
-        [BurstCompile]
         public static BallState Integrate(in BallState s, in BallParams p, float totalTime, float dt)
         {
             BallState cur = s;

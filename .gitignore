@@ -51,3 +51,8 @@ captures/
 
 # Build log của tools/build.sh
 build_*.log
+open.log
+tier*.log
+boot.log
+tests*.log
+results.xml

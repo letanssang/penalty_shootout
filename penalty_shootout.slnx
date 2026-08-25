@@ -1,0 +1,6 @@
+﻿<Solution>
+  <Project Path="Eleven.Presentation.csproj" />
+  <Project Path="Eleven.Tests.EditMode.csproj" />
+  <Project Path="Eleven.Ball.csproj" />
+  <Project Path="Assembly-CSharp-Editor.csproj" />
+</Solution>

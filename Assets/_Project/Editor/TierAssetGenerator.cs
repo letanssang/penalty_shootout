@@ -15,6 +15,54 @@ namespace Eleven.Editor.Tools
     {
         const string SettingsDir = "Assets/_Project/Settings";
 
+        /// <summary>
+        /// Một hàng của bảng "Ba bậc thiết bị" trong docs/plan.md. Để literal có kiểu thay vì
+        /// mảng chuỗi + float.TryParse: TryParse đọc theo culture hiện hành, và trên máy đặt
+        /// locale dùng dấu phẩy thập phân thì "0.80" ra 80 chứ không phải 0.8.
+        /// </summary>
+        readonly struct TierRow
+        {
+            public readonly string name;
+            public readonly QualityTier tier;
+            public readonly float renderScale;
+            public readonly int targetFrameRate;
+            public readonly float grassDensity;
+            public readonly bool netSimulation;
+            public readonly bool subsurfaceScattering;
+            public readonly bool lightShafts;
+            public readonly int textureMemoryBudgetMB;
+            public readonly int msaaSampleCount;
+            public readonly bool supportsHDR;
+            public readonly float shadowDistance;
+
+            public TierRow(string name, QualityTier tier, float renderScale, int targetFrameRate,
+                           float grassDensity, bool netSimulation, bool subsurfaceScattering,
+                           bool lightShafts, int textureMemoryBudgetMB, int msaaSampleCount,
+                           bool supportsHDR, float shadowDistance)
+            {
+                this.name = name;
+                this.tier = tier;
+                this.renderScale = renderScale;
+                this.targetFrameRate = targetFrameRate;
+                this.grassDensity = grassDensity;
+                this.netSimulation = netSimulation;
+                this.subsurfaceScattering = subsurfaceScattering;
+                this.lightShafts = lightShafts;
+                this.textureMemoryBudgetMB = textureMemoryBudgetMB;
+                this.msaaSampleCount = msaaSampleCount;
+                this.supportsHDR = supportsHDR;
+                this.shadowDistance = shadowDistance;
+            }
+        }
+
+        static readonly TierRow[] Rows =
+        {
+            //          tên  bậc            rScale fps  cỏ    lưới   SSS    shaft  texMB msaa HDR    shadow
+            new TierRow("A", QualityTier.A, 1.00f, 60, 1.0f, true,  true,  true,  400,  4,   true,  40f),
+            new TierRow("B", QualityTier.B, 0.80f, 60, 0.4f, true,  true,  false, 250,  2,   true,  25f),
+            new TierRow("C", QualityTier.C, 0.65f, 30, 0.0f, false, false, false, 140,  2,   false, 15f),
+        };
+
         [MenuItem("Eleven/Phase 0/Generate Tier Assets")]
         public static void Generate()
         {
@@ -24,17 +72,10 @@ namespace Eleven.Editor.Tools
             var profiles = new TierProfile[3];
             var urpAssets = new UniversalRenderPipelineAsset[3];
 
-            string[][] rows =
-            {
-                new[] { "A", "1.0", "60", "1.0", "1", "1", "1", "400" },
-                new[] { "B", "0.80", "60", "0.4", "1", "1", "0", "250" },
-                new[] { "C", "0.65", "30", "0.0", "0", "0", "0", "140" },
-            };
-
             for (int i = 0; i < 3; i++)
             {
-                urpAssets[i] = CreateOrLoadUrp(rows[i][0]);
-                profiles[i] = CreateOrLoadProfile(rows[i], i);
+                urpAssets[i] = CreateOrLoadUrp(Rows[i]);
+                profiles[i] = CreateOrLoadProfile(Rows[i]);
             }
 
             ApplyQualityLevels(profiles, urpAssets);
@@ -46,12 +87,11 @@ namespace Eleven.Editor.Tools
             Debug.Log("[TierAssetGenerator] Đã sinh xong 3 URP asset + 3 TierProfile + 3 quality level (A/B/C).");
         }
 
-        static UniversalRenderPipelineAsset CreateOrLoadUrp(string tier)
+        static UniversalRenderPipelineAsset CreateOrLoadUrp(in TierRow r)
         {
+            string tier = r.name;
             string path = $"{SettingsDir}/URP-Tier{tier}.asset";
-            var existing = AssetDatabase.LoadAssetAtPath<UniversalRenderPipelineAsset>(path);
-            if (existing != null)
-                return existing;
+            var urp = AssetDatabase.LoadAssetAtPath<UniversalRenderPipelineAsset>(path);
 
             // Renderer data đi kèm mỗi tier. Dùng reflection cho cờ Forward+ vì tên thuộc tính
             // đổi giữa các phiên bản URP; không có thì giữ mặc định và ghi log nhắc chỉnh tay.
@@ -73,23 +113,31 @@ namespace Eleven.Editor.Tools
                 AssetDatabase.CreateAsset(rendererData, rdPath);
             }
 
-            var createMethod = typeof(UniversalRenderPipelineAsset).GetMethod(
-                "Create", new[] { typeof(ScriptableRendererData) });
-            UniversalRenderPipelineAsset urp = createMethod != null
-                ? (UniversalRenderPipelineAsset)createMethod.Invoke(null, new object[] { rendererData })
-                : ScriptableObject.CreateInstance<UniversalRenderPipelineAsset>();
+            if (urp == null)
+            {
+                var createMethod = typeof(UniversalRenderPipelineAsset).GetMethod(
+                    "Create", new[] { typeof(ScriptableRendererData) });
+                urp = createMethod != null
+                    ? (UniversalRenderPipelineAsset)createMethod.Invoke(null, new object[] { rendererData })
+                    : ScriptableObject.CreateInstance<UniversalRenderPipelineAsset>();
+                AssetDatabase.CreateAsset(urp, path);
+            }
 
-            AssetDatabase.CreateAsset(urp, path);
-            urp.renderScale = tier == "A" ? 1.0f : tier == "B" ? 0.80f : 0.65f;
-            urp.msaaSampleCount = tier == "A" ? 4 : 2;
-            urp.supportsHDR = tier != "C";
-            urp.shadowDistance = tier == "A" ? 40f : tier == "B" ? 25f : 15f;
+            // Áp giá trị chuẩn KỂ CẢ khi asset đã tồn tại — đó là ý nghĩa của "chạy lại được".
+            urp.renderScale = r.renderScale;
+            urp.msaaSampleCount = r.msaaSampleCount;
+            urp.supportsHDR = r.supportsHDR;
+            urp.shadowDistance = r.shadowDistance;
+
+            // CreateAsset ghi trạng thái LÚC TẠO ra đĩa; mọi thay đổi sau đó chỉ nằm trong bộ nhớ.
+            // Thiếu SetDirty thì SaveAssets() bỏ qua và file giữ nguyên giá trị mặc định.
+            EditorUtility.SetDirty(urp);
             return urp;
         }
 
-        static TierProfile CreateOrLoadProfile(string[] row, int index)
+        static TierProfile CreateOrLoadProfile(in TierRow r)
         {
-            string path = $"{SettingsDir}/TierProfile-{row[0]}.asset";
+            string path = $"{SettingsDir}/TierProfile-{r.name}.asset";
             var p = AssetDatabase.LoadAssetAtPath<TierProfile>(path);
             if (p == null)
             {
@@ -97,14 +145,19 @@ namespace Eleven.Editor.Tools
                 AssetDatabase.CreateAsset(p, path);
             }
 
-            p.tier = (QualityTier)index;
-            float.TryParse(row[1], out p.renderScale);
-            int.TryParse(row[2], out p.targetFrameRate);
-            float.TryParse(row[3], out p.grassDensity);
-            p.netSimulation = row[4] == "1";
-            p.subsurfaceScattering = row[5] == "1";
-            p.lightShafts = row[6] == "1";
-            int.TryParse(row[7], out p.textureMemoryBudgetMB);
+            p.tier = r.tier;
+            p.renderScale = r.renderScale;
+            p.targetFrameRate = r.targetFrameRate;
+            p.grassDensity = r.grassDensity;
+            p.netSimulation = r.netSimulation;
+            p.subsurfaceScattering = r.subsurfaceScattering;
+            p.lightShafts = r.lightShafts;
+            p.textureMemoryBudgetMB = r.textureMemoryBudgetMB;
+
+            // Xem chú thích ở CreateOrLoadUrp: không SetDirty là không ghi ra đĩa.
+            // Field initializer của TierProfile trùng đúng hàng A, nên bug này biểu hiện
+            // thành "B và C mang giá trị của A" chứ không phải thành giá trị rỗng.
+            EditorUtility.SetDirty(p);
             return p;
         }
 

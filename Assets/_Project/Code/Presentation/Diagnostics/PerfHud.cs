@@ -138,7 +138,15 @@ namespace Eleven.Core.Diagnostics
         {
             if (sampler != null) return sampler;
             var go = new GameObject("Eleven.PerfHud");
-            Object.DontDestroyOnLoad(go);
+
+            // DontDestroyOnLoad CHỈ hợp lệ ở play mode — gọi từ EditMode (test nghiệm thu T04
+            // dựng CSV mà không cần thiết bị) ném InvalidOperationException. HideAndDontSave
+            // cho đúng ngữ nghĩa tương đương ngoài play mode: không ghi vào scene, không bị
+            // dọn khi đổi scene.
+            if (Application.isPlaying)
+                Object.DontDestroyOnLoad(go);
+            else
+                go.hideFlags = HideFlags.HideAndDontSave;
             sampler = go.AddComponent<PerfHudSampler>();
             renderer = go.AddComponent<PerfHudRenderer>();
             return sampler;
