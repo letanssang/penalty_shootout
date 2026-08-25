@@ -6,8 +6,12 @@
         "Eleven.Keeper",
         "Eleven.Shooter",
         "Eleven.Match",
+        "Eleven.Presentation",
         "UnityEngine.TestRunner",
-        "UnityEditor.TestRunner"
+        "UnityEditor.TestRunner",
+        "Unity.Mathematics",
+        "Unity.Collections",
+        "Unity.RenderPipelines.Universal.Runtime"
     ],
     "includePlatforms": [
         "Editor"
