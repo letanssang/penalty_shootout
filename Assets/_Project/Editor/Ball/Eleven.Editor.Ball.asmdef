@@ -1,0 +1,22 @@
+{
+    "name": "Eleven.Editor.Ball",
+    "rootNamespace": "",
+    "references": [
+        "Eleven.Ball",
+        "Eleven.Match",
+        "Unity.Mathematics",
+        "Unity.Collections",
+        "Unity.Burst"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

@@ -7,6 +7,7 @@
         "Eleven.Shooter",
         "Eleven.Match",
         "Eleven.Presentation",
+        "Eleven.Editor.Ball",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner",
         "Unity.Mathematics",

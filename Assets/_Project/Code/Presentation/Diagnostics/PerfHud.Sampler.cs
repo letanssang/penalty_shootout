@@ -22,7 +22,7 @@ namespace Eleven.Core.Diagnostics
             setPassCalls = ProfilerRecorder.StartNew(ProfilerCategory.Render, "SetPass Calls");
             triangles = ProfilerRecorder.StartNew(ProfilerCategory.Render, "Triangles");
             gcAlloc = ProfilerRecorder.StartNew(ProfilerCategory.Memory, "GC Allocated In Frame");
-            textureMem = ProfilerRecorder.StartNew(ProfilerCategory.Memory, "Total Texture Memory");
+            textureMem = ProfilerRecorder.StartNew(ProfilerCategory.Memory, "Texture Memory");
         }
 
         void OnDisable()
