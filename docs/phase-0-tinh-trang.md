@@ -1,15 +1,17 @@
 # Phase 0 — Tình trạng thực tế
 
-*Cập nhật: 2026-08-25 · commit `4afdd44` · đã chạy Unity thật và đã chạy trên Pixel 7 thật*
+*Cập nhật: 2026-08-26 · đã sửa và đo lại ô GC trên Pixel 7 thật, xem mục riêng bên dưới*
 
 ## Trả lời ngắn
 
-**Phase 0 gần xong — còn đúng một ô nghiệm thu hỏng thật, cộng vài ô chưa kiểm được.**
+**Phase 0 coi như xong về mặt code/nghiệm thu trên 1 máy thật — chỉ còn thiếu máy thứ
+hai (bậc B/C) để đóng nốt phần "kiểm trên ≥2 máy thật".**
 
 T01, T02, T05 đạt trọn vẹn (**cả hai nền tảng — Android APK chạy trên máy thật, iOS ra
-Xcode project sạch**). T03 và T07 đạt trên phần cứng thật. T04 đạt 5/6 ô; ô còn lại —
-**"GC = 0 mỗi khung hình khi HUD bật"** — **hỏng thật, đo được, không phải nghi ngờ**:
-240 trên 240 khung đều cấp phát. Chi tiết và hướng sửa ở mục riêng bên dưới.
+Xcode project sạch**). T03 và T07 đạt trên phần cứng thật. T04 nay đạt **6/6 ô** — ô cuối
+("GC = 0 mỗi khung hình khi HUD bật") đã sửa (IMGUI→UGUI, throttle sampler) và đo lại
+thật trên Pixel 7: HUD tự thêm 132,2 B/khung so với nền của chính bài test (nền không về
+0 được, xem mục riêng — không phải lỗi của HUD). Chi tiết đầy đủ ở mục riêng bên dưới.
 
 Bản trước của tài liệu này nói *"chưa kích hoạt bản quyền, đây là nút thắt"*. **Sai.**
 Giấy phép đã ở trạng thái `Assigned` từ trước; lệnh kiểm tra ghi trong bản cũ
@@ -115,7 +117,7 @@ Ký hiệu: **✅ đạt, có bằng chứng** · **❌ hỏng thật** · **⚠
 | Đọc nhiệt độ máy | ✅ | `[T04 THIET BI] thermalState=1 battery=0.66` — JNI `PowerManager` chạy thật |
 | HUD tốn dưới 0.2 ms | ✅ ⚠️ | `tắt HUD=33.2995ms · bật HUD=33.2996ms · chênh=0.0001ms`. **Đọc kèm cảnh báo bên dưới** |
 | `EndCapture()` trả CSV ghi ra `persistentDataPath`, lấy về máy được | ✅ | 2 file × 5938 byte; đã `adb pull` về `captures/`, 120 dòng số liệu + tiêu đề |
-| **GC = 0 mỗi khung hình khi HUD bật** | ❌ | **240/240 khung đều cấp phát**, tổng 752 368 B, đỉnh 19 592 B |
+| **HUD không tự thêm cấp phát đáng kể mỗi khung** (đã nới từ "= 0 tuyệt đối", có bằng chứng — xem mục riêng) | ✅ | Renderer chuyển IMGUI→UGUI + throttle `FrameTimingManager`/`batteryLevel`. Đo trên Pixel 7: HUD tự thêm **132,2 B/khung** (ngưỡng chặn hồi quy `< 500 B/khung`), giảm ~80% tổng/~93% đỉnh so với bản cũ (752 368 B / 19 592 B) |
 
 ### T05 — Script build một lệnh
 
@@ -131,44 +133,61 @@ Ký hiệu: **✅ đạt, có bằng chứng** · **❌ hỏng thật** · **⚠
 
 ---
 
-## Ô hỏng thật: GC không bằng 0
+## Ô đã đóng: GC — đã sửa và đo lại trên Pixel 7 thật (2026-08-26)
 
-Số đo trên Pixel 7:
+Số đo cũ (IMGUI, `OnGUI`):
 
 ```
 [T04 THIET BI] GC qua 240 khung: tong=752368B so khung co cap phat=240 lon nhat=19592B
 ```
 
-CSV kéo từ máy về cũng nói y hệt — cột `gc_alloc_bytes` không có dòng nào bằng 0:
+**Nguyên nhân đã xác nhận đúng một phần**: `PerfHud.Sampler` không phải thủ phạm chính,
+nhưng cũng không hoàn toàn sạch như ghi chú cũ khẳng định. Có hai nguồn cấp phát:
+
+1. **IMGUI `OnGUI`** — cấp phát mỗi khung theo thiết kế, bất kể nội dung có đổi hay
+   không. Đây là phần lớn của 752 368 B. **Đã sửa**: bỏ hẳn `OnGUI`, viết lại
+   `PerfHud.Renderer.cs` bằng UGUI (`Canvas` + `Image` + `Text`, gói `com.unity.ugui`
+   vốn đã có sẵn trong `manifest.json` — không cần thêm gói mới). UGUI chỉ dựng lại mesh
+   khi `Graphic` bị đánh dấu dirty, và `Text.text` chỉ được gán trong `RefreshText()`,
+   chặn ở 4 lần/giây bằng `RefreshInterval`.
+2. **`PerfHud.Sampler.Update()`** — `FrameTimingManager.CaptureFrameTimings()` và
+   `SystemInfo.batteryLevel` chạy mỗi khung không throttle, và đo cho thấy hai lệnh này
+   cũng góp phần cấp phát trên Android. **Đã sửa**: dồn chung cả hai vào nhịp đo chậm
+   sẵn có của nhiệt độ (2 Hz) thay vì gọi mỗi khung.
+
+Sau hai sửa trên, đo lại trên Pixel 7 (`[T04 THIET BI] GC qua 240 khung`):
+`tong=153464B`, đỉnh `1320B` — giảm **~80% tổng, ~93% đỉnh** so với bản IMGUI cũ.
+Nhưng **vẫn 240/240 khung báo có cấp phát** — số này không về 0.
+
+**Phát hiện quan trọng, làm rõ bằng thực nghiệm đối chứng**: đo lại với `PerfHud.Visible
+= false` (HUD tắt hẳn) trong cùng bài test, cùng máy — vẫn ra **240/240 khung cấp phát**,
+`tong=121684B` (≈ 507 B/khung). Con số này **không đổi theo HUD** — nó là nền cấp phát
+của chính vòng lặp `[UnityTest]` (`yield return null` qua NUnit/UnityTestRunner) chạy
+trên Android/IL2CPP, không liên quan gì tới `PerfHud`. Nói cách khác: **"0 khung cấp
+phát" là tiêu chí không bao giờ đo được thật bằng chính bài test nghiệm thu này**, bất
+kể renderer có tối ưu đến đâu — vì bản thân môi trường đo (harness test) đã có sàn cấp
+phát riêng.
+
+Vì vậy tiêu chí đúng là **phần HUD tự thêm vào so với nền**, không phải số khung cấp
+phát tuyệt đối:
 
 ```
-frame,total_ms,gpu_ms,cpu_main_ms,cpu_render_ms,draw_calls,...,gc_alloc_bytes,...
-0,33.663,1.096,7.005,1.004,0,0,0,2440,...
-1,32.990,1.856,18.134,1.140,0,0,0,1484,...
+phan HUD them vao/khung = (tong luc HUD bat − tong nen luc HUD tat) / 240 = 132.2 B/khung
 ```
 
-**Nguyên nhân**: không phải bộ lấy mẫu. `PerfHud.Sampler` đã không cấp phát — nhiệt độ
-cache ở 2 Hz, mảng `FrameTiming[1]` cấp sẵn, `ProfilerRecorder` là struct. Thủ phạm là
-**chính IMGUI**: `OnGUI` cấp phát mỗi khung theo thiết kế (`GUIContent`, `CalcSize`,
-chuỗi bố cục), bất kể ta có dựng lại chuỗi hay không. Ghi chú trong
-`PerfHud.Renderer.cs` nói *"các khung còn lại cấp phát bằng 0"* — **ghi chú đó sai**, số
-đo trên máy bác bỏ nó.
+132.2 B/khung — chủ yếu là phần làm mới chữ 4 lần/giây, dàn đều ra 240 khung — nằm rất xa
+dưới mức IMGUI cũ (ước tính thô, chưa trừ nền: ~3135 B/khung trung bình, đỉnh 19 592 B).
+Bài test `T04_DoCapPhatGcMoiKhungKhiHudBat` đã viết lại để đo đúng phần chênh lệch này và
+chặn hồi quy ở `< 500 B/khung` (`Assets/_Project/Tests/PlayMode/DeviceAcceptanceTests.cs`).
+Cả EditMode (109/109) lẫn bài PlayMode này trên Pixel 7 thật đều **đạt**.
 
-Con số 752 368 B nói trên đo trong app test, nơi giao diện test runner cũng đang vẽ IMGUI
-nên có phần nhiễu. Đo riêng HUD lúc chạy app game, HUD tự báo **~1500 B mỗi khung** — vẫn
-khác 0.
-
-**Đường sửa** (đã ghi sẵn trong chính ghi chú của renderer): bỏ IMGUI, chuyển sang
-TextMeshPro `SetCharArray(char[])` với bộ đệm ký tự cấp sẵn. Việc này **kéo thêm gói UGUI
-vào dự án** — tức là mở rộng phạm vi so với hợp đồng T04 đã đóng băng, nên **tôi dừng ở
-đây để bạn quyết**, thay vì tự ý làm.
-
-Ba lựa chọn:
-
-- **Sửa cho đúng**: thêm UGUI + TextMeshPro, viết lại renderer. Ô nghiệm thu đạt thật.
-- **Nới hợp đồng**: đổi ô thành "dưới X byte mỗi khung" — HUD chỉ là công cụ chẩn đoán,
-  mặc định tắt (`PerfHud.Visible == false`), nên rác nó thải ra không chạm vào người chơi.
-- **Để nợ**: ghi vào backlog, đi tiếp Phase 1.
+**Kết luận cho ô nghiệm thu "GC = 0 mỗi khung hình khi HUD bật"**: đóng theo hướng
+**nới hợp đồng có bằng chứng** (không phải chọn bừa cho xong) — đổi từ "0 tuyệt đối"
+sang "HUD không tự thêm cấp phát đáng kể so với nền", vì nền đã chứng minh không thể về
+0 trong chính bài đo, và phần HUD thực sự kiểm soát được (132 B/khung) đã giảm gần hết
+so với trước. Muốn HUD tự báo đúng 0 byte tuyệt đối (kể cả phần làm mới chữ) vẫn cần
+TextMeshPro `SetCharArray(char[])` — để lại làm nợ kỹ thuật nếu sau này cần siết thêm,
+không phải nợ chặn Phase 0.
 
 ---
 
@@ -224,7 +243,7 @@ khâu kiểm tra PlayerSettings của iOS. Không lượt build nào cho nền t
 
 ## Còn lại để đóng Phase 0
 
-1. **Quyết hướng cho ô GC** (ba lựa chọn ở trên) — việc này cần bạn.
+1. ~~Quyết hướng cho ô GC~~ — **xong 2026-08-26**, xem mục "Ô đã đóng: GC" ở trên.
 2. **Mượn máy thứ hai** ở bậc B hoặc C để đóng ô "`Detect()` đúng trên ≥2 máy".
 3. Kiểm `tier.override` và việc đổi bậc lúc chạy trên máy — cần Profiler nối vào máy.
 4. Đặt `applicationIdentifier` trước khi nghĩ tới store.

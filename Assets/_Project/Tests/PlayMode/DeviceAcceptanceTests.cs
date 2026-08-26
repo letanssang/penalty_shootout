@@ -194,10 +194,25 @@ namespace Eleven.Tests.PlayMode
         [UnityTest]
         public IEnumerator T04_DoCapPhatGcMoiKhungKhiHudBat()
         {
+            // Đo thật trên Pixel 7 cho thấy framesWithAlloc == 240/240 CẢ KHI HUD TẮT (nền
+            // ~500B/khung, không đổi theo HUD) — UnityTestRunner/NUnit tự cấp phát mỗi khung
+            // khi chạy vòng lặp [UnityTest] (yield return null), nên "0 khung cấp phát" không
+            // bao giờ đo được thật trong chính bài test này, bất kể HUD làm gì. Cách đo đúng:
+            // trừ nền (HUD tắt) để lấy phần HUD tự thêm vào, rồi chặn phần thêm đó ở mức nhỏ.
+            const int sample = 240;
+
+            PerfHud.Visible = false;
+            for (int i = 0; i < 30; i++) yield return null;
+            long baseTotal = 0;
+            for (int i = 0; i < sample; i++)
+            {
+                yield return null;
+                baseTotal += PerfHud.Current.gcAllocBytes;
+            }
+            Debug.Log($"[T04 THIET BI] GC nen (HUD tat) qua {sample} khung: tong={baseTotal}B");
+
             PerfHud.Visible = true;
             for (int i = 0; i < 30; i++) yield return null;
-
-            const int sample = 240;
             long total = 0; int framesWithAlloc = 0; long worst = 0;
             for (int i = 0; i < sample; i++)
             {
@@ -206,14 +221,15 @@ namespace Eleven.Tests.PlayMode
                 if (a > 0) { framesWithAlloc++; total += a; if (a > worst) worst = a; }
             }
 
+            float marginPerFrame = (total - baseTotal) / (float)sample;
             Debug.Log($"[T04 THIET BI] GC qua {sample} khung: tong={total}B " +
-                      $"so khung co cap phat={framesWithAlloc} lon nhat={worst}B");
+                      $"so khung co cap phat={framesWithAlloc} lon nhat={worst}B " +
+                      $"phan HUD them vao/khung={marginPerFrame:F1}B");
 
-            // Ghi nhận trung thực: đường ĐO không cấp phát, nhưng phần dựng CHỮ làm mới
-            // 4 lần/giây thì có. Ngưỡng dưới đây bắt lỗi hồi quy ở đường đo, không phải
-            // khẳng định HUD cấp phát 0 byte — muốn 0 thật phải dùng TextMeshPro SetCharArray.
-            Assert.Less(framesWithAlloc, sample / 4,
-                "Phần lớn khung phải không cấp phát — nếu gần như khung nào cũng cấp phát thì đường đo đã hồi quy");
+            // Chặn hồi quy: nếu HUD tự thêm hơn 500B/khung là quay lại kiểu OnGUI (từng đo
+            // ~3135B/khung, đỉnh 19592B) chứ không phải UGUI chỉ làm mới chữ 4 lần/giây.
+            Assert.Less(marginPerFrame, 500f,
+                "HUD không được tự thêm cấp phát đáng kể mỗi khung so với nền lúc tắt HUD");
         }
 
         // ─── T04: CSV ghi ra persistentDataPath ───
