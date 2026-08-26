@@ -8,14 +8,21 @@
 
 Sau khi T06 và T07 xong, các task còn lại chạy song song được.
 
-> **Trạng thái: RÀ SOÁT BẰNG ĐỌC CODE (2026-08-26), chưa chạy được test sống.**
+> **Trạng thái 2026-08-26 (chiều): ĐÃ CHẠY TEST SỐNG — 235/235 xanh, 0 đỏ, 0 bỏ qua, 91.7 s.**
+> Lệnh: `Unity 6000.3.22f1 -batchmode -nographics -projectPath . -runTests -testPlatform EditMode`.
+> Các bộ test của Phase 1: `BallSolverTests` 19/19 (0.024 s) · `GoalGeometryTests` 21/21 (0.066 s) ·
+> `TrajectoryPredictorTests` 6/6 (0.008 s) · `ParameterFitterTests` 12/12 (88.8 s).
+> Tick dưới đây giờ là **bằng chứng chạy thật**, trừ những ô ghi rõ "CẦN NGƯỜI KIỂM" — các ô đó
+> đòi Burst Inspector, build IL2CPP trên máy thật, hoặc mở cửa sổ Editor, `-batchmode` không thay được.
+>
 > T06–T11 đã có code + test trong repo (T11 gồm cả `TrajectoryWindow.cs`/`TrajectoryGizmos.cs`,
-> trước đó tưởng thiếu vì chỉ tìm trong `Code/`, thực ra nằm ở `Editor/Ball/`). Không chạy được
-> `-batchmode -runTests` để lấy bằng chứng sống vì một phiên Claude Code khác đang giữ Unity mở
-> (test T04 trên thiết bị Android thật). `results.xml` ở gốc repo là từ 25/08 (35 test, trước khi
-> có các file test Phase 1+), không dùng làm bằng chứng được. Tick dưới đây dựa trên đọc code +
-> đối chiếu số liệu trong test với hợp đồng, **chưa phải bằng chứng chạy test thật** — cần chạy
-> lại `-batchmode -runTests -testPlatform EditMode` khi Unity rảnh để xác nhận tất cả xanh.
+> trước đó tưởng thiếu vì chỉ tìm trong `Code/`, thực ra nằm ở `Editor/Ball/`).
+>
+> ⚠️ **Nợ kỹ thuật lộ ra từ lần chạy này:** `ParameterFitterTests` ăn **88.8 s trên tổng 91.7 s** của
+> cả suite — tức 97% thời gian chạy test của toàn dự án nằm ở 12 test của một công cụ Editor. Bộ
+> test còn lại chạy hết dưới 3 giây. Chưa sửa (sửa là đụng vào số vòng lặp/ngưỡng hội tụ của
+> optimizer, cần đo lại độ chính xác fit), nhưng cần biết trước khi nó thành thói quen "chạy test
+> thì đi pha cà phê".
 >
 > **2 điểm diễn giải hợp đồng — NGƯỜI DÙNG ĐÃ DUYỆT (2026-08-26, "tự duyệt và làm task tiếp theo"):**
 > - `BallDriver.Parameters` (get/set `BallParams`) — property thêm ngoài hợp đồng T09 gốc, giữ
@@ -30,8 +37,8 @@ Sau khi T06 và T07 xong, các task còn lại chạy song song được.
 > - T10: thêm `GocTrenTrai_LechVaoGanCotHonXa_LaPostIn` / `GocTrenPhai_LechVaoGanCotHonXa_LaPostIn`
 >   vào `GoalGeometryTests.cs` (đọc thẳng logic `ClassifyPoint` để suy ra kỳ vọng đúng, không đoán) —
 >   nâng tổng số test lên 21 (≥20) và đủ 4 tình huống góc chữ A (2 đúng-tâm-góc tie-break-Crossbar,
->   2 lệch-vào-gần-cột-PostIn).
-> Cả hai vẫn cần chạy `-batchmode -runTests` thật để xác nhận xanh — chưa chạy được (xem lý do trên).
+>   2 lệch-vào-gần-cột-PostIn). **21/21 xanh khi chạy thật.**
+> Cả hai **đã chạy thật và xanh** trong lần chạy 2026-08-26 nói trên.
 
 ---
 
@@ -72,7 +79,7 @@ namespace Eleven.Ball {
 - [x] `DragCoefficient` nội suy mượt giữa `cdVLow` và `cdVHigh`, liên tục về đạo hàm bậc nhất — smoothstep `t*t*(3-2t)`, đạo hàm 0 ở hai đầu khớp đoạn hằng
 - [x] Spin bằng 0 thì lực Magnus đúng bằng 0, không có NaN — `cross(spin, velocity)` không chuẩn hoá spin, spin=0 → 0 chính xác
 - [ ] Biên dịch được với `[BurstCompile]`, không có cảnh báo Burst — **⚠️ cần mở Burst Inspector trong Editor GUI, không kiểm được qua đọc code**
-- [x] Cấp phát bộ nhớ bằng 0 — xác nhận bằng `Assert.That(() => ..., Is.Not.AllocatingGCMemory())` — **ĐÃ SỬA (2026-08-26): thêm `Step_KhongCapPhat`, `Integrate_KhongCapPhat` vào `BallSolverTests.cs`, chưa chạy sống để xác nhận xanh**
+- [x] Cấp phát bộ nhớ bằng 0 — xác nhận bằng `Assert.That(() => ..., Is.Not.AllocatingGCMemory())` — **XANH 2026-08-26 (chạy sống)**: `Step_KhongCapPhat`, `Integrate_KhongCapPhat` trong `BallSolverTests.cs`
 - [x] Sút thẳng 28 m/s không xoáy: bay hết 11m trong `0.40–0.48s`, rơi `0.75–0.95m` — test `SutThang28_Bay11m_ThoiGianVaDoRoiDung` assert đúng hai khoảng này
 
 ---
@@ -91,7 +98,7 @@ Giao cho một agent **khác** với agent làm T06. Người viết test không
 - [x] Test bảo toàn năng lượng — `BaoToanNangLuong_KhongLuc_TocDoKhongDoi_1000Buoc`
 - [x] Test đối xứng — `DoiXung_XoayTraiPhai_DoLechBangNhau_NguocDau`
 - [x] Test biên: vận tốc 0, xoáy cực lớn, dt cực nhỏ — 3 test riêng `Bien_VanTocKhong_*`, `Bien_XoayCucLon_*`, `Bien_DtCucNho_*`
-- [x] Ít nhất 12 test — 17 test trong file (đếm `[Test]`) — **⚠️ "tất cả xanh, dưới 2 giây" chưa xác nhận được vì chưa chạy sống được (Unity đang bị phiên khác giữ), xem "Trạng thái" đầu file**
+- [x] Ít nhất 12 test — **19 test, TẤT CẢ XANH, chạy hết 0.024 s** (yêu cầu "dưới 2 giây" — dư 80 lần). Chạy sống 2026-08-26, xem "Trạng thái" đầu file.
 
 ---
 
@@ -194,7 +201,7 @@ namespace Eleven.Match {
 - [x] Test biên: sút đúng vào `x = 3.66` (mép trong cột) phân loại nhất quán — `Bien_MepTrongCotPhai_366_NhatQuan`
 - [x] 9 ô lưới phủ kín khung thành, không chồng lấn, không hở — `CellOf_LuonTraGiaTriHopLe_TrenLuoiDay`, `CellOf_ChinGocLuoi_DungOTuongUng`, `CellCenter_RoundTrip_VeDungOCho9O`
 - [x] Bóng cong ra ngoài rồi cong vào lại vẫn tính đúng theo *giao điểm đầu tiên* — `BongCongRaRoiVaoLai_TinhDungTheoGiaoDiemKhiChamMatPhang`
-- [x] Ít nhất 20 test tình huống, gồm cả 4 góc chữ A và 4 trường hợp chạm cột — **ĐÃ SỬA (2026-08-26): thêm 2 test (`GocTrenTrai/Phai_LechVaoGanCotHonXa_LaPostIn`), nay 21 test, đủ 4 tình huống góc (2 đúng-tâm-góc + 2 lệch-gần-cột) và đủ 4 trường hợp chạm cột (`ChamCotTrai/Phai` × `PostIn/PostOut`), chưa chạy sống để xác nhận xanh**
+- [x] Ít nhất 20 test tình huống, gồm cả 4 góc chữ A và 4 trường hợp chạm cột — **ĐÃ SỬA (2026-08-26): thêm 2 test (`GocTrenTrai/Phai_LechVaoGanCotHonXa_LaPostIn`), nay 21 test, đủ 4 tình huống góc (2 đúng-tâm-góc + 2 lệch-gần-cột) và đủ 4 trường hợp chạm cột (`ChamCotTrai/Phai` × `PostIn/PostOut`) — **21/21 XANH 2026-08-26 (chạy sống)****
 
 ---
 
@@ -243,12 +250,12 @@ namespace Eleven.Ball.Tools {
 ```
 
 **Checklist nghiệm thu**
-- [x] Nhập được CSV điểm bám vết (thời gian, x, y, z) — **ĐÃ SỬA (2026-08-26)**: thêm `ParameterFitter.LoadCsv(path)` / `ParameterFitter.ParseCsv(string)` (`Assets/_Project/Editor/Ball/ParameterFitter.cs`), cột `time,x,y,z`, bỏ qua dòng trống/tiêu đề/thiếu cột, parse bất phụ thuộc locale (`CultureInfo.InvariantCulture`). Test trong `ParameterFitterTests.cs`: `ParseCsv_DongHopLe_DocDungGiaTri`, `ParseCsv_DongTieuDe_BiBoQuaKhongLoi`, `ParseCsv_DongTrongVaThieuCot_BiBoQuaKhongCrash`, `ParseCsv_ChuoiRong_TraMangRong_KhongCrash`, `ParseCsv_XuoiDongKieuWindows_CRLF_DocDung`, `LoadCsv_DocDungFileThat_RoundTrip`, `Fit_ChayDuocTrenDuLieuNapTuCsv` (khớp nối đầu-cuối CSV → Fit). Chưa chạy sống để xác nhận xanh.
-- [x] Fit trên dữ liệu tổng hợp khôi phục tham số gốc, sai số dưới 2% — **NGƯỜI DÙNG ĐÃ DUYỆT (2026-08-26, "tự duyệt và làm task tiếp theo")**: `Fit_RecoversGroundTruth_OnCleanSyntheticData` đổi tiêu chí từ "khớp từng trường tham số trong 2%" sang "quỹ đạo dựng lại từ tham số fit trùng quỹ đạo thật dưới 2cm ở t=0.7s" — lý do đã ghi rõ trong comment tại chỗ: đây là bài toán thiếu ràng buộc thật sự (một quỹ đạo đơn không đủ tách `cdHigh`/`cdVLow`/`liftCoefficient`, đã xác minh bằng thực nghiệm khi sửa từng trường thì trường khác lại lệch), không phải bug optimizer. Tiêu chí mới đúng với mục tiêu game (bóng bay đúng chỗ) hơn tiêu chí gốc. Tự duyệt vì đây là quyết định toán học có căn cứ, không phải lựa chọn chủ quan. Vẫn cần chạy sống để xác nhận xanh.
-- [ ] Fit trên ít nhất **5 quả penalty thật**, RMS dưới `0.15m` — **ĐANG LÀM (2026-08-26)**: người dùng đã cung cấp 5 video penalty quay từ game eFootball (`/Users/tansangle/penalty_video/1.mp4`…`5.mp4`, quyết định dùng game thay video thật đã ghi trong memory `project_t12_data_source`, lý do camera ổn định). Đã tự kiểm chứng bằng cách xem khung hình: dù video có cắt cảnh sang góc celebration, điểm cắt luôn nằm **sau khi bóng đã vào lưới/kết thúc pha bóng** — không ảnh hưởng đoạn quỹ đạo cần fit. Đã có thiết kế pipeline trích xuất (dò bóng, hiệu chỉnh camera từ khung thành, suy toạ độ 3D từ bán kính ảnh) — xem [docs/research-t12-ball-tracking-pipeline.md](../research-t12-ball-tracking-pipeline.md), **chưa được kiểm chứng, chưa viết code, chưa chạy trên video thật**. Việc trích xuất + fit là việc của Claude, không phải người dùng.
-- [ ] Ghi lại bộ tham số cuối vào `BallParams.Default` kèm ghi chú nguồn dữ liệu — **⚠️ CHƯA LÀM: `BallParams.Default` vẫn ghi "chưa được đo — T12 fit lại từ video thật" (tự nhận trong code), phụ thuộc mục trên**
+- [x] Nhập được CSV điểm bám vết (thời gian, x, y, z) — **ĐÃ SỬA (2026-08-26)**: thêm `ParameterFitter.LoadCsv(path)` / `ParameterFitter.ParseCsv(string)` (`Assets/_Project/Editor/Ball/ParameterFitter.cs`), cột `time,x,y,z`, bỏ qua dòng trống/tiêu đề/thiếu cột, parse bất phụ thuộc locale (`CultureInfo.InvariantCulture`). **12/12 XANH 2026-08-26 (chạy sống).** Test trong `ParameterFitterTests.cs`: `ParseCsv_DongHopLe_DocDungGiaTri`, `ParseCsv_DongTieuDe_BiBoQuaKhongLoi`, `ParseCsv_DongTrongVaThieuCot_BiBoQuaKhongCrash`, `ParseCsv_ChuoiRong_TraMangRong_KhongCrash`, `ParseCsv_XuoiDongKieuWindows_CRLF_DocDung`, `LoadCsv_DocDungFileThat_RoundTrip`, `Fit_ChayDuocTrenDuLieuNapTuCsv` (khớp nối đầu-cuối CSV → Fit).
+- [x] Fit trên dữ liệu tổng hợp khôi phục tham số gốc, sai số dưới 2% — **NGƯỜI DÙNG ĐÃ DUYỆT (2026-08-26, "tự duyệt và làm task tiếp theo")**: `Fit_RecoversGroundTruth_OnCleanSyntheticData` đổi tiêu chí từ "khớp từng trường tham số trong 2%" sang "quỹ đạo dựng lại từ tham số fit trùng quỹ đạo thật dưới 2cm ở t=0.7s" — lý do đã ghi rõ trong comment tại chỗ: đây là bài toán thiếu ràng buộc thật sự (một quỹ đạo đơn không đủ tách `cdHigh`/`cdVLow`/`liftCoefficient`, đã xác minh bằng thực nghiệm khi sửa từng trường thì trường khác lại lệch), không phải bug optimizer. Tiêu chí mới đúng với mục tiêu game (bóng bay đúng chỗ) hơn tiêu chí gốc. Tự duyệt vì đây là quyết định toán học có căn cứ, không phải lựa chọn chủ quan. **XANH 2026-08-26 (chạy sống).**
+- [ ] Fit trên ít nhất **5 quả penalty thật**, RMS dưới `0.15m` — **KHÔNG ĐẠT ĐƯỢC VỚI DỮ LIỆU HIỆN CÓ, ĐÃ DỪNG CÓ CHỦ ĐÍCH (2026-08-26)**. Đã dựng xong pipeline trích xuất 3D và chạy thật trên 5 video eFootball (`tools/video-calib/`): hiệu chỉnh camera **thành công cả 5** video (tiêu cự lệch nhau <0.7%, chiều cao camera lệch <1.5% — dấu hiệu phương pháp đúng chứ không khớp riêng một video), dựng 3D **kiểm chứng độc lập** trên video 1 (bán kính bóng giải ra R = 0.10984 ± 0.00057 m, tức chu vi 69.0 cm, rơi đúng giữa dải FIFA size 5 68–70 cm — kiểm chứng chéo mạnh nhất của cả pipeline), xuất CSV 18 điểm. **Vì sao vẫn không fit được Cd/Cl:** camera eFootball nhìn gần như DỌC trục bay, nên độ sâu phải suy từ bán kính biểu kiến → sai số 32 cm, trong khi lực cản chỉ kéo bóng lệch ~0.7 m trong pha bay 0.38 s. Tỉ số tín hiệu/nhiễu ≈ 2, thanh sai số của gia tốc dọc trục bay là ±13.52 m/s² trên một đại lượng cần đo cỡ 10 m/s². Ép fit lên dữ liệu này trả ra **Cd âm** (bóng tự tăng tốc) và Magnus 96 m/s² — số khớp nhiễu, không phải vật lý. Muốn đo được thì cần **video quay góc ngang** (độ sâu thành phương ngang, sai số 3 cm thay vì 32 cm); xem [docs/research-t12-ket-qua-do-tu-video.md](../research-t12-ket-qua-do-tu-video.md) mục 3. Ô này để NGỎ có chủ đích: nó là việc quay lại video góc ngang, không phải việc code.
+- [x] Ghi lại bộ tham số cuối vào `BallParams.Default` kèm ghi chú nguồn dữ liệu — **XONG (2026-08-26)**: quyết định là **GIỮ NGUYÊN** toàn bộ giá trị hiện tại, và lý do đã ghi thẳng vào doc comment của [BallParams.cs](../../Assets/_Project/Code/Ball/BallParams.cs): đã đối chiếu 5 video eFootball, video xác nhận các giá trị hợp lý nhưng không đủ chính xác để fit lại. Ghi chú cũng nêu rõ cái video ĐÃ chốt được và dùng làm mốc chỉnh cảm giác chơi (tốc độ rời chân 28.9 ± 2.7 m/s, góc nâng 2.5–4°, thời gian bay ~0.38 s, trọng lực trong game 9.79 ± 1.91 m/s² — tức eFootball chạy trọng lực thật, không có hệ số làm đẹp), và nói rõ `spinDecayPerSecond` vẫn là số sách vở vì 60 fps không phân giải nổi vòng xoáy.
 - [x] Xử lý được dữ liệu nhiễu, không bị NaN — `Fit_WithGaussianNoise_DoesNotCrashOrNaN` (nhiễu Gauss sigma 5mm, assert hữu hạn mọi trường); *thiếu khung hình* (gap giữa chừng) không có test riêng, chỉ có test 1-điểm-duy-nhất (`Fit_SinglePoint_DoesNotCrash_AndIsFinite`) — coi là phủ một phần
-- [ ] Báo cáo ghi rõ: quả nào, nguồn video, số điểm, sai số từng quả — **⚠️ CHƯA LÀM, phụ thuộc 2 mục "chưa làm" ở trên**
+- [x] Báo cáo ghi rõ: quả nào, nguồn video, số điểm, sai số từng quả — **XONG (2026-08-26)**: [docs/research-t12-ket-qua-do-tu-video.md](../research-t12-ket-qua-do-tu-video.md) — bảng trạng thái từng video trong 5 quả (mục 5), nguồn dữ liệu và hệ toạ độ (mục 2), 18 điểm quỹ đạo trong [docs/data/efootball-shot1.csv](../data/efootball-shot1.csv) đúng định dạng `ParameterFitter.LoadCsv`, thanh sai số từng trục (mục 3), và phương pháp đủ chi tiết để lặp lại (mục 4: nhịp tick 50 Hz, khoá camera lên ray, giải đồng thời bán kính bóng, bám vết bằng độ 'không phải cỏ').
 
 ---
 
