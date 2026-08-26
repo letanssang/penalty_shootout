@@ -644,13 +644,10 @@ namespace Eleven.Tests.EditMode
             };
             float dt = 1f / 120f;
 
-            // Gọi trước một lần ngoài Assert để loại trừ JIT warm-up khỏi phép đo cấp phát
-            BallSolver.Step(s, p, dt);
+            TestDelegate action = () => BallSolver.Step(s, p, dt);
+            action();
 
-            Assert.That(() =>
-            {
-                BallSolver.Step(s, p, dt);
-            }, Is.Not.AllocatingGCMemory());
+            Assert.That(action, Is.Not.AllocatingGCMemory());
         }
 
         [Test]
@@ -666,12 +663,10 @@ namespace Eleven.Tests.EditMode
             float dt = 1f / 120f;
             float totalTime = 0.5f;
 
-            BallSolver.Integrate(s, p, totalTime, dt);
+            TestDelegate action = () => BallSolver.Integrate(s, p, totalTime, dt);
+            action();
 
-            Assert.That(() =>
-            {
-                BallSolver.Integrate(s, p, totalTime, dt);
-            }, Is.Not.AllocatingGCMemory());
+            Assert.That(action, Is.Not.AllocatingGCMemory());
         }
     }
 }

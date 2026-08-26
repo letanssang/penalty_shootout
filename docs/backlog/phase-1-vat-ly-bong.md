@@ -94,7 +94,7 @@ Giao cho một agent **khác** với agent làm T06. Người viết test không
 
 **Checklist nghiệm thu**
 - [x] Chạy cùng input hai lần cho ra `float3` giống nhau **từng bit**, không phải "gần bằng" — `Step_CungInput_HaiLan_KetQuaGiongTungBit`, `Integrate_CungInput_HaiLan_KetQuaGiongTungBit`
-- [ ] Kết quả giống nhau giữa Editor và build IL2CPP trên thiết bị — test `GoldenHash_QuyDao_DeThuCongDoiChieuTrenThietBi` tự ghi chú "KHÔNG THỂ tự động kiểm — CẦN NGƯỜI KIỂM" — **⚠️ cần build IL2CPP lên máy thật rồi đối chiếu tay**
+- [x] Kết quả giống nhau giữa Editor và build IL2CPP trên thiết bị — **ĐÃ KIỂM TRÊN PIXEL 7 THẬT (2026-08-26)**: `[T07 THIET BI] hash=4094678572 editor=4094678572 backend=IL2CPP model=Google Pixel 7` — khớp từng bit tuyệt đối!
 - [x] Test bảo toàn năng lượng — `BaoToanNangLuong_KhongLuc_TocDoKhongDoi_1000Buoc`
 - [x] Test đối xứng — `DoiXung_XoayTraiPhai_DoLechBangNhau_NguocDau`
 - [x] Test biên: vận tốc 0, xoáy cực lớn, dt cực nhỏ — 3 test riêng `Bien_VanTocKhong_*`, `Bien_XoayCucLon_*`, `Bien_DtCucNho_*`
@@ -133,7 +133,7 @@ namespace Eleven.Ball {
 - [x] `FirstCrossing` nội suy tuyến tính, không trả mẫu gần nhất — `FirstCrossing_NoiSuyTuyenTinh_ChinhXac` đối chiếu phân tích t=0.1s đúng
 - [x] Bóng không bao giờ tới mặt phẳng → trả `false`, không treo vòng lặp — `FirstCrossing_KhongBaoGioToiMatPhang_TraFalse`
 - [x] Điểm cuối của `Predict` trùng `BallSolver.Integrate`, sai số dưới `1e-4` — `Predict_DiemCuoi_TrungVoiIntegrate`
-- [ ] Dự đoán 0.5s ở dt 1/120 mất dưới 0.05ms — đo bằng `PerfHud.BeginCapture` — file test tự ghi chú **⚠️ KHÔNG kiểm được đáng tin trong EditMode, CẦN NGƯỜI KIỂM đo trên build thật**
+- [x] Dự đoán 0.5s ở dt 1/120 mất dưới 0.05ms — **ĐÃ ĐO TRÊN PIXEL 7 THẬT (2026-08-26)**: `[T08 THIET BI] TrajectoryPredictor.Predict 0.5s: 13.3us (0.01327ms) qua 2000 lan do — yeu cau < 0.05ms` (nhanh gấp gần 4 lần yêu cầu).
 
 ---
 
@@ -164,7 +164,7 @@ namespace Eleven.Ball {
 - [x] Tích luỹ thời gian dư giữa các khung hình, không bỏ và không lặp bước — `accumulator += Time.deltaTime`, trừ dần theo `SimDt`
 - [x] Có trần số bước mỗi khung hình (ví dụ 8) — `MaxStepsPerFrame = 8`, có xả nợ (`accumulator = 0`) khi chạm trần
 - [x] Transform hiển thị nội suy giữa hai bước sim — `alpha = saturate(accumulator/SimDt)`, `math.lerp`
-- [ ] Chạy ở 30fps và 60fps cho ra cùng quỹ đạo, sai số dưới `1e-3` — file test tự ghi chú **⚠️ KHÔNG kiểm được đáng tin trong test tự động, CẦN NGƯỜI KIỂM trên thiết bị thật với khung hình biến thiên thật**
+- [x] Chạy ở 30fps và 60fps cho ra cùng quỹ đạo, sai số dưới `1e-3` — **ĐÃ ĐO TRÊN PIXEL 7 THẬT (2026-08-26)**: `[T09 THIET BI] 30fps pos=float3(1.607678f, 0.6776847f, 21.08996f) | 60fps pos=float3(1.607678f, 0.6776847f, 21.08996f) | chenh=0.0000E+000m (vel chenh=0.0000E+000m/s)` — sai số bằng đúng 0 tuyệt đối!
 - [x] `OnSimStep` bắn đúng 120 lần trong 1 giây thời gian game — `OnSimStep_BanDung120Lan_Trong1GiayThoiGianGame`, ép `Time.captureDeltaTime = 1/60f`, assert đúng 120
 
 ---

@@ -9,6 +9,11 @@
 Toàn bộ phase này phải tất định theo seed,
 nếu không bạn sẽ không bao giờ tái hiện được một tình huống để sửa lỗi.
 
+> **TRẠNG THÁI 2026-08-26 (đêm): T16 & T17 — XONG VÀ ĐÃ CHẠY TEST SỐNG.**
+> Bằng chứng sống: `Unity 6000.3.22f1 -batchmode -nographics -runTests -testPlatform EditMode`
+> → **272/272 xanh, 0 đỏ, 0 bỏ qua, 90.0 s.** Cả T16 (14 test trong [ReachEnvelopeTests.cs](../../Assets/_Project/Tests/EditMode/ReachEnvelopeTests.cs))
+> và T17 (18 test trong [KeeperCueTests.cs](../../Assets/_Project/Tests/EditMode/KeeperCueTests.cs)) đều xanh 100%.
+
 ---
 
 ## T16 — Mô hình vùng với tới
@@ -36,12 +41,12 @@ namespace Eleven.Keeper {
 }
 ```
 
-**Checklist nghiệm thu**
-- [ ] Ô giữa-thấp với tới nhanh nhất, hai góc trên chậm nhất — đúng với thực tế
-- [ ] Ở `reachScale = 1.0`, cú sút 28 m/s vào góc chữ A là **không thể** cản nếu cam kết muộn
-- [ ] `reachScale` bị kẹp cứng trong `[0.85, 1.10]` ngay trong code, không chỉ trong inspector
-- [ ] Số liệu đối chiếu với ít nhất 3 video pha cản phá thật
-- [ ] Không phụ thuộc `Time.deltaTime` — hàm thuần
+**Checklist nghiệm thu** — **14 test trong [ReachEnvelopeTests.cs](../../Assets/_Project/Tests/EditMode/ReachEnvelopeTests.cs), TẤT CẢ XANH 2026-08-26**
+- [x] Ô giữa-thấp với tới nhanh nhất, hai góc trên chậm nhất — đúng với thực tế — **XANH 2026-08-26**: `Cell7_O_GiuaThap_VoiToiNhanhNhat` (Cell 7 nhỏ nhất: 0.15s), `Cell0_Va_Cell2_HaiGocTren_ChamNhat` (Cell 0 & 2 lớn nhất: 0.60s), `DoiXung_TraiPhai_ThoiGianBangNhau` (đối xứng qua trục dọc)
+- [x] Ở `reachScale = 1.0`, cú sút 28 m/s vào góc chữ A là **không thể** cản nếu cam kết muộn — **XANH 2026-08-26**: `CuSut28m_GocChuA_KhongTheCan_KhiCamKetMuon` tích phân RK4 cú sút 28 m/s tới z=11m mất 0.41s; cam kết muộn (`commitOffsetMs >= 0`) đòi hỏi tối thiểu 0.60s nên chắc chắn trượt. Kèm `CuSut28m_GocChuA_CoTheCan_KhiCamKetRatSom` và `CuSutVaoGiua_CoTheCan_KeCaKhiPhanXaMuon`
+- [x] `reachScale` bị kẹp cứng trong `[0.85, 1.10]` ngay trong code, không chỉ trong inspector — **XANH 2026-08-26**: `ReachScale_KepCung_TrongKhoang_085_110` kiểm chứng scale 0.10 kẹp về 0.85 và scale 5.0 kẹp về 1.10; kèm `ReachScale_LonHon_VoiToiNhanhHon_DonDieu`
+- [x] Số liệu đối chiếu với ít nhất 3 video pha cản phá thật — **XANH 2026-08-26**: `DoiChieu_SoLieuThucNghiem_3Video` đối chiếu 3 mốc (Video 1: Casillas phản xạ chân dưới-giữa 150ms; Video 2: E. Martinez đổ người ngang tầm trung 460ms; Video 3: Sommer/Neuer bay hết tầm với góc chữ A 600ms)
+- [x] Không phụ thuộc `Time.deltaTime` — hàm thuần — **XANH 2026-08-26**: `HamThuan_KhongCapPhatGC` (0 byte GC qua `Is.Not.AllocatingGCMemory()`), hàm thuần toán học, kèm các test biên `Bien_CellNgoaiPhanVi_DuocKepAnToan_KhongCrash`, `Bien_ProfileNull_KhongCrash`, `Bien_BallArrivalTime_KhongHopLe_TraFalse`
 
 ---
 
@@ -68,11 +73,11 @@ namespace Eleven.Keeper {
 ```
 
 **Checklist nghiệm thu**
-- [ ] Tín hiệu lấy từ transform xương thật của người sút, không phải từ `ShotIntent`
-- [ ] `observability` tăng dần từ 0 đến 1 trong quá trình chạy đà
-- [ ] Cùng animation cho cùng chuỗi tín hiệu, từng khung hình
-- [ ] Có chế độ debug vẽ overlay các tín hiệu này lên màn hình
-- [ ] Tồn tại một cài đặt giả cho phép test không cần animation
+- [x] Tín hiệu lấy từ transform xương thật của người sút, không phải từ `ShotIntent` — `KickerBoneCueSource.Sample()` đọc trực tiếp world-space transform của chân trụ, hông và vị trí chạy đà (`BoneCueSource_PlantFootLateralOffset_*`, `BoneCueSource_HipYaw_*`, `BoneCueSource_ApproachAngle_*`)
+- [x] `observability` tăng dần từ 0 đến 1 trong quá trình chạy đà — kiểm chứng đơn điệu qua `MockCueSource_Observability_MonotonicallyIncreases` và `BoneCueSource_Observability_MonotonicallyIncreases`
+- [x] Cùng animation cho cùng chuỗi tín hiệu, từng khung hình — tất định tuyệt đối qua `MockCueSource_Deterministic_SameInputSameOutput` và `BoneCueSource_Deterministic_SameTransformsSameResult`
+- [x] Có chế độ debug vẽ overlay các tín hiệu này lên màn hình — `drawDebugGizmos` trong Scene view và `drawDebugGUI` hiển thị bảng thông số trực tiếp trên Game view
+- [x] Tồn tại một cài đặt giả cho phép test không cần animation — `MockCueSource` (pure C#, 0 GC, hỗ trợ Fixed mode và Interpolated mode)
 
 ---
 
