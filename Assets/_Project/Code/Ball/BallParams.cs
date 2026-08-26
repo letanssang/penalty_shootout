@@ -6,9 +6,19 @@ namespace Eleven.Ball
     /// <summary>
     /// Tham số khí động của bóng size 5. Giá trị mặc định lấy từ docs/plan.md mục 05.
     ///
-    /// Đây là ĐIỂM KHỞI ĐẦU, không phải điểm kết thúc: T12 sẽ fit lại cdLow/cdHigh/cdVLow/
-    /// cdVHigh/liftCoefficient/spinDecayPerSecond từ video penalty thật. Vì vậy mọi con số
-    /// đều nằm trong struct này chứ không hằng số hoá trong solver.
+    /// NGUỒN SỐ LIỆU (T12, 2026-08-26): đã đối chiếu với 5 video penalty eFootball
+    /// 1920×1080 capture 60 fps. Kết luận: GIỮ NGUYÊN các giá trị dưới đây.
+    /// Video xác nhận chúng hợp lý nhưng KHÔNG đủ chính xác để fit lại Cd/Cl — camera
+    /// nhìn gần như dọc trục bay nên sai số chiều sâu nuốt trọn đại lượng cần đo
+    /// (fit thô cho ra Cd âm, tức bóng tự tăng tốc). Chi tiết và thanh sai số:
+    /// docs/research-t12-ket-qua-do-tu-video.md.
+    ///
+    /// Cái video ĐÃ chốt được, dùng làm mốc chỉnh cảm giác chơi chứ không phải tham số ở đây:
+    /// tốc độ rời chân 28.9 ± 2.7 m/s, góc nâng 2.5–4°, thời gian bay ~0.38 s,
+    /// trọng lực trong game 9.79 ± 1.91 m/s² (tức eFootball dùng trọng lực thật, không bịa).
+    ///
+    /// Mọi con số vẫn nằm trong struct này chứ không hằng số hoá trong solver, để lần sau
+    /// có video quay GÓC NGANG thì fit lại được mà không phải đụng vào solver.
     /// </summary>
     [Serializable]
     public struct BallParams
@@ -47,7 +57,8 @@ namespace Eleven.Ball
 
             liftCoefficient = 0.25f,
             // Xoáy tắt chậm trong pha bay 0.45s: mất khoảng 4.4% mỗi giây.
-            // Con số này chưa được đo — T12 fit lại từ video thật.
+            // T12 KHÔNG đo được con số này: video eFootball không phân giải nổi vòng xoáy
+            // của bóng ở 60 fps. Vẫn là giá trị sách vở, giữ nguyên cho tới khi có dữ liệu thật.
             spinDecayPerSecond = 0.045f,
         };
     }

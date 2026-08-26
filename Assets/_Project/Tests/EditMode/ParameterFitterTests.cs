@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using NUnit.Framework;
 using Unity.Mathematics;
@@ -196,5 +197,95 @@ namespace Eleven.Tests.EditMode
             return math.sqrt(-2f * math.log(u1)) * math.cos(2f * math.PI * u2);
         }
 
+        // ─── Nhập CSV điểm bám vết ───────────────────────────────────────
+
+        [Test]
+        public void ParseCsv_DongHopLe_DocDungGiaTri()
+        {
+            var pts = ParameterFitter.ParseCsv("0.10,1.0,2.0,3.0\n0.20,1.1,2.1,3.1\n");
+
+            Assert.AreEqual(2, pts.Length);
+            Assert.AreEqual(0.10f, pts[0].time, 1e-6f);
+            Assert.AreEqual(new float3(1.0f, 2.0f, 3.0f), pts[0].position);
+            Assert.AreEqual(0.20f, pts[1].time, 1e-6f);
+            Assert.AreEqual(new float3(1.1f, 2.1f, 3.1f), pts[1].position);
+        }
+
+        [Test]
+        public void ParseCsv_DongTieuDe_BiBoQuaKhongLoi()
+        {
+            // Dòng đầu "time,x,y,z" không parse được số ở cột đầu -> tự động bỏ qua,
+            // không cần caller tự cắt dòng tiêu đề.
+            var pts = ParameterFitter.ParseCsv("time,x,y,z\n0.5,1,2,3\n");
+
+            Assert.AreEqual(1, pts.Length);
+            Assert.AreEqual(0.5f, pts[0].time, 1e-6f);
+        }
+
+        [Test]
+        public void ParseCsv_DongTrongVaThieuCot_BiBoQuaKhongCrash()
+        {
+            var pts = ParameterFitter.ParseCsv("0.1,1,2,3\n\n   \n0.2,1,2\n0.3,4,5,6\n");
+
+            // Dòng rỗng, dòng toàn khoảng trắng, và dòng thiếu cột (0.2,1,2) đều bị bỏ qua.
+            Assert.AreEqual(2, pts.Length);
+            Assert.AreEqual(0.1f, pts[0].time, 1e-6f);
+            Assert.AreEqual(0.3f, pts[1].time, 1e-6f);
+        }
+
+        [Test]
+        public void ParseCsv_ChuoiRong_TraMangRong_KhongCrash()
+        {
+            Assert.AreEqual(0, ParameterFitter.ParseCsv("").Length);
+            Assert.AreEqual(0, ParameterFitter.ParseCsv(null).Length);
+        }
+
+        [Test]
+        public void ParseCsv_XuoiDongKieuWindows_CRLF_DocDung()
+        {
+            var pts = ParameterFitter.ParseCsv("0.1,1,2,3\r\n0.2,4,5,6\r\n");
+            Assert.AreEqual(2, pts.Length);
+            Assert.AreEqual(new float3(4f, 5f, 6f), pts[1].position);
+        }
+
+        [Test]
+        public void LoadCsv_DocDungFileThat_RoundTrip()
+        {
+            string path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"pf_test_{System.Guid.NewGuid():N}.csv");
+            try
+            {
+                System.IO.File.WriteAllText(path, "time,x,y,z\n0.0,0,0.11,0\n0.1,0.3,0.4,2.8\n");
+                var pts = ParameterFitter.LoadCsv(path);
+
+                Assert.AreEqual(2, pts.Length);
+                Assert.AreEqual(new float3(0.3f, 0.4f, 2.8f), pts[1].position);
+            }
+            finally
+            {
+                if (System.IO.File.Exists(path)) System.IO.File.Delete(path);
+            }
+        }
+
+        [Test]
+        public void Fit_ChayDuocTrenDuLieuNapTuCsv()
+        {
+            // Khớp nối đầu-cuối: CSV -> ParseCsv -> Fit, không chỉ kiểm riêng từng hàm.
+            var truth = GroundTruth();
+            var s0 = InitialState();
+            var samples = SampleTrajectory(truth, s0, 10, 0.6f);
+
+            var sb = new System.Text.StringBuilder();
+            foreach (var pt in samples)
+                sb.AppendLine(FormattableString.Invariant(
+                    $"{pt.time},{pt.position.x},{pt.position.y},{pt.position.z}"));
+
+            var observed = ParameterFitter.ParseCsv(sb.ToString());
+            Assert.AreEqual(samples.Length, observed.Length);
+
+            float rms;
+            BallState fi;
+            ParameterFitter.Fit(observed, InitialState(), out rms, out fi);
+            Assert.That(rms, Is.LessThan(0.01f), "Fit trên dữ liệu nạp từ CSV phải cho RMS thấp như dữ liệu in-memory");
+        }
     }
 }

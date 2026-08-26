@@ -8,6 +8,31 @@
 
 Sau khi T06 và T07 xong, các task còn lại chạy song song được.
 
+> **Trạng thái: RÀ SOÁT BẰNG ĐỌC CODE (2026-08-26), chưa chạy được test sống.**
+> T06–T11 đã có code + test trong repo (T11 gồm cả `TrajectoryWindow.cs`/`TrajectoryGizmos.cs`,
+> trước đó tưởng thiếu vì chỉ tìm trong `Code/`, thực ra nằm ở `Editor/Ball/`). Không chạy được
+> `-batchmode -runTests` để lấy bằng chứng sống vì một phiên Claude Code khác đang giữ Unity mở
+> (test T04 trên thiết bị Android thật). `results.xml` ở gốc repo là từ 25/08 (35 test, trước khi
+> có các file test Phase 1+), không dùng làm bằng chứng được. Tick dưới đây dựa trên đọc code +
+> đối chiếu số liệu trong test với hợp đồng, **chưa phải bằng chứng chạy test thật** — cần chạy
+> lại `-batchmode -runTests -testPlatform EditMode` khi Unity rảnh để xác nhận tất cả xanh.
+>
+> **2 điểm diễn giải hợp đồng — NGƯỜI DÙNG ĐÃ DUYỆT (2026-08-26, "tự duyệt và làm task tiếp theo"):**
+> - `BallDriver.Parameters` (get/set `BallParams`) — property thêm ngoài hợp đồng T09 gốc, giữ
+>   nguyên vì hợp lý và không có cách nào khác để truyền `BallParams` vào trước `Launch()`.
+> - `GoalGeometry`: mặt khung ở `z = PenaltyDistance` (không phải z=0); đường tâm cột/xà lùi ra
+>   ngoài mép trong đúng `PostRadius`; `PostIn`/`PostOut` tính theo quỹ đạo giả định bỏ qua khung
+>   (không mô phỏng bóng nảy ra khi chạm cột thật) — giữ nguyên, không viết lại.
+>
+> **Đã sửa 2 gap sau phiên rà soát 2026-08-26:**
+> - T06: thêm `Step_KhongCapPhat` / `Integrate_KhongCapPhat` (`Is.Not.AllocatingGCMemory()`) vào
+>   `BallSolverTests.cs` — trước đó thiếu bằng chứng cấp-phát-0 cho `BallSolver`.
+> - T10: thêm `GocTrenTrai_LechVaoGanCotHonXa_LaPostIn` / `GocTrenPhai_LechVaoGanCotHonXa_LaPostIn`
+>   vào `GoalGeometryTests.cs` (đọc thẳng logic `ClassifyPoint` để suy ra kỳ vọng đúng, không đoán) —
+>   nâng tổng số test lên 21 (≥20) và đủ 4 tình huống góc chữ A (2 đúng-tâm-góc tie-break-Crossbar,
+>   2 lệch-vào-gần-cột-PostIn).
+> Cả hai vẫn cần chạy `-batchmode -runTests` thật để xác nhận xanh — chưa chạy được (xem lý do trên).
+
 ---
 
 ## T06 — BallSolver, hàm thuần
@@ -42,13 +67,13 @@ namespace Eleven.Ball {
 ```
 
 **Checklist nghiệm thu**
-- [ ] Không có `using UnityEngine;` trong file solver — chỉ `Unity.Mathematics`
-- [ ] Tích phân RK4 hoặc velocity Verlet, **không** dùng Euler tiến
-- [ ] `DragCoefficient` nội suy mượt giữa `cdVLow` và `cdVHigh`, liên tục về đạo hàm bậc nhất
-- [ ] Spin bằng 0 thì lực Magnus đúng bằng 0, không có NaN
-- [ ] Biên dịch được với `[BurstCompile]`, không có cảnh báo Burst
-- [ ] Cấp phát bộ nhớ bằng 0 — xác nhận bằng `Assert.That(() => ..., Is.Not.AllocatingGCMemory())`
-- [ ] Sút thẳng 28 m/s không xoáy: bay hết 11m trong `0.40–0.48s`, rơi `0.75–0.95m`
+- [x] Không có `using UnityEngine;` trong file solver — chỉ `Unity.Mathematics` — chỉ `using Unity.Burst; using Unity.Mathematics;`
+- [x] Tích phân RK4 hoặc velocity Verlet, **không** dùng Euler tiến — `Step()` là RK4 4 giai đoạn (k1..k4)
+- [x] `DragCoefficient` nội suy mượt giữa `cdVLow` và `cdVHigh`, liên tục về đạo hàm bậc nhất — smoothstep `t*t*(3-2t)`, đạo hàm 0 ở hai đầu khớp đoạn hằng
+- [x] Spin bằng 0 thì lực Magnus đúng bằng 0, không có NaN — `cross(spin, velocity)` không chuẩn hoá spin, spin=0 → 0 chính xác
+- [ ] Biên dịch được với `[BurstCompile]`, không có cảnh báo Burst — **⚠️ cần mở Burst Inspector trong Editor GUI, không kiểm được qua đọc code**
+- [x] Cấp phát bộ nhớ bằng 0 — xác nhận bằng `Assert.That(() => ..., Is.Not.AllocatingGCMemory())` — **ĐÃ SỬA (2026-08-26): thêm `Step_KhongCapPhat`, `Integrate_KhongCapPhat` vào `BallSolverTests.cs`, chưa chạy sống để xác nhận xanh**
+- [x] Sút thẳng 28 m/s không xoáy: bay hết 11m trong `0.40–0.48s`, rơi `0.75–0.95m` — test `SutThang28_Bay11m_ThoiGianVaDoRoiDung` assert đúng hai khoảng này
 
 ---
 
@@ -61,12 +86,12 @@ Giao cho một agent **khác** với agent làm T06. Người viết test không
 **File được phép tạo/sửa:** `Assets/_Project/Tests/EditMode/BallSolverTests.cs`
 
 **Checklist nghiệm thu**
-- [ ] Chạy cùng input hai lần cho ra `float3` giống nhau **từng bit**, không phải "gần bằng"
-- [ ] Kết quả giống nhau giữa Editor và build IL2CPP trên thiết bị
-- [ ] Test bảo toàn năng lượng: không cản, không xoáy, không trọng lực → tốc độ không đổi sau 1000 bước
-- [ ] Test đối xứng: xoáy trái và xoáy phải cùng độ lớn cho độ lệch bằng nhau, ngược dấu
-- [ ] Test biên: vận tốc 0, xoáy cực lớn, dt cực nhỏ — không NaN, không Infinity
-- [ ] Ít nhất 12 test, tất cả xanh, chạy dưới 2 giây
+- [x] Chạy cùng input hai lần cho ra `float3` giống nhau **từng bit**, không phải "gần bằng" — `Step_CungInput_HaiLan_KetQuaGiongTungBit`, `Integrate_CungInput_HaiLan_KetQuaGiongTungBit`
+- [ ] Kết quả giống nhau giữa Editor và build IL2CPP trên thiết bị — test `GoldenHash_QuyDao_DeThuCongDoiChieuTrenThietBi` tự ghi chú "KHÔNG THỂ tự động kiểm — CẦN NGƯỜI KIỂM" — **⚠️ cần build IL2CPP lên máy thật rồi đối chiếu tay**
+- [x] Test bảo toàn năng lượng — `BaoToanNangLuong_KhongLuc_TocDoKhongDoi_1000Buoc`
+- [x] Test đối xứng — `DoiXung_XoayTraiPhai_DoLechBangNhau_NguocDau`
+- [x] Test biên: vận tốc 0, xoáy cực lớn, dt cực nhỏ — 3 test riêng `Bien_VanTocKhong_*`, `Bien_XoayCucLon_*`, `Bien_DtCucNho_*`
+- [x] Ít nhất 12 test — 17 test trong file (đếm `[Test]`) — **⚠️ "tất cả xanh, dưới 2 giây" chưa xác nhận được vì chưa chạy sống được (Unity đang bị phiên khác giữ), xem "Trạng thái" đầu file**
 
 ---
 
@@ -96,12 +121,12 @@ namespace Eleven.Ball {
 ```
 
 **Checklist nghiệm thu**
-- [ ] `Predict` cấp phát 0 byte khi buffer được truyền vào
-- [ ] Buffer nhỏ hơn số mẫu cần: dừng đúng lúc đầy, không tràn
-- [ ] `FirstCrossing` nội suy tuyến tính giữa hai bước để lấy điểm cắt chính xác, không trả về mẫu gần nhất
-- [ ] Bóng không bao giờ tới mặt phẳng → trả `false`, không treo vòng lặp
-- [ ] Điểm cuối của `Predict` trùng với chạy `BallSolver.Integrate` cùng tham số, sai số dưới `1e-4`
-- [ ] Dự đoán 0.5s ở dt 1/120 mất dưới 0.05ms — đo bằng `PerfHud.BeginCapture`
+- [x] `Predict` cấp phát 0 byte khi buffer được truyền vào — `Predict_KhongCapPhat`, `Is.Not.AllocatingGCMemory()`
+- [x] Buffer nhỏ hơn số mẫu cần: dừng đúng lúc đầy, không tràn — `Predict_BufferNho_DungDungLucDay_KhongTran`
+- [x] `FirstCrossing` nội suy tuyến tính, không trả mẫu gần nhất — `FirstCrossing_NoiSuyTuyenTinh_ChinhXac` đối chiếu phân tích t=0.1s đúng
+- [x] Bóng không bao giờ tới mặt phẳng → trả `false`, không treo vòng lặp — `FirstCrossing_KhongBaoGioToiMatPhang_TraFalse`
+- [x] Điểm cuối của `Predict` trùng `BallSolver.Integrate`, sai số dưới `1e-4` — `Predict_DiemCuoi_TrungVoiIntegrate`
+- [ ] Dự đoán 0.5s ở dt 1/120 mất dưới 0.05ms — đo bằng `PerfHud.BeginCapture` — file test tự ghi chú **⚠️ KHÔNG kiểm được đáng tin trong EditMode, CẦN NGƯỜI KIỂM đo trên build thật**
 
 ---
 
@@ -128,12 +153,12 @@ namespace Eleven.Ball {
 ```
 
 **Checklist nghiệm thu**
-- [ ] `Time.fixedDeltaTime` giữ nguyên mặc định — grep toàn project không thấy chỗ nào gán nó
-- [ ] Tích luỹ thời gian dư giữa các khung hình, không bỏ và không lặp bước
-- [ ] Có trần số bước mỗi khung hình (ví dụ 8) để tránh xoáy chết khi máy khựng
-- [ ] Transform hiển thị nội suy giữa hai bước sim — bóng mượt ở 60fps dù sim 120Hz
-- [ ] Chạy ở 30fps và 60fps cho ra cùng quỹ đạo, sai số dưới `1e-3`
-- [ ] `OnSimStep` bắn đúng 120 lần trong 1 giây thời gian game
+- [x] `Time.fixedDeltaTime` giữ nguyên mặc định — grep toàn project không thấy chỗ nào gán nó — xác nhận, chỉ có `Time.captureDeltaTime` trong test (ép nhịp khung, không phải fixedDeltaTime)
+- [x] Tích luỹ thời gian dư giữa các khung hình, không bỏ và không lặp bước — `accumulator += Time.deltaTime`, trừ dần theo `SimDt`
+- [x] Có trần số bước mỗi khung hình (ví dụ 8) — `MaxStepsPerFrame = 8`, có xả nợ (`accumulator = 0`) khi chạm trần
+- [x] Transform hiển thị nội suy giữa hai bước sim — `alpha = saturate(accumulator/SimDt)`, `math.lerp`
+- [ ] Chạy ở 30fps và 60fps cho ra cùng quỹ đạo, sai số dưới `1e-3` — file test tự ghi chú **⚠️ KHÔNG kiểm được đáng tin trong test tự động, CẦN NGƯỜI KIỂM trên thiết bị thật với khung hình biến thiên thật**
+- [x] `OnSimStep` bắn đúng 120 lần trong 1 giây thời gian game — `OnSimStep_BanDung120Lan_Trong1GiayThoiGianGame`, ép `Time.captureDeltaTime = 1/60f`, assert đúng 120
 
 ---
 
@@ -164,12 +189,12 @@ namespace Eleven.Match {
 ```
 
 **Checklist nghiệm thu**
-- [ ] Kích thước đúng luật IFAB: `7.32 × 2.44`, chấm phạt đền `11m`
-- [ ] Cột dọc là hình trụ bán kính `0.06`, không phải mặt phẳng — bóng chạm cột phải xử lý đúng
-- [ ] Test biên: sút đúng vào `x = 3.66` (mép trong cột) phân loại nhất quán, không dao động
-- [ ] 9 ô lưới phủ kín khung thành, không chồng lấn, không hở
-- [ ] Bóng cong ra ngoài rồi cong vào lại vẫn tính đúng theo *giao điểm đầu tiên*
-- [ ] Ít nhất 20 test tình huống, gồm cả 4 góc chữ A và 4 trường hợp chạm cột
+- [x] Kích thước đúng luật IFAB: `7.32 × 2.44`, chấm phạt đền `11m` — hằng số khớp + test `KichThuoc_DungLuatIFAB`
+- [ ] Cột dọc là hình trụ bán kính `0.06`, không phải mặt phẳng — bóng chạm cột phải xử lý đúng — hằng `PostRadius = 0.06f` có, khoảng cách điểm-tới-đoạn thẳng đúng dạng hình trụ; nhưng PostIn/PostOut vẫn dùng quỹ đạo giả định bỏ qua khung (không nảy vật lý thật) — **đã được duyệt giữ nguyên (xem "Trạng thái" đầu file), nhưng để nguyên chưa tick vì "xử lý đúng" khi chạm cột thật (bóng đổi hướng) chưa có, chỉ có phân loại kết quả**
+- [x] Test biên: sút đúng vào `x = 3.66` (mép trong cột) phân loại nhất quán — `Bien_MepTrongCotPhai_366_NhatQuan`
+- [x] 9 ô lưới phủ kín khung thành, không chồng lấn, không hở — `CellOf_LuonTraGiaTriHopLe_TrenLuoiDay`, `CellOf_ChinGocLuoi_DungOTuongUng`, `CellCenter_RoundTrip_VeDungOCho9O`
+- [x] Bóng cong ra ngoài rồi cong vào lại vẫn tính đúng theo *giao điểm đầu tiên* — `BongCongRaRoiVaoLai_TinhDungTheoGiaoDiemKhiChamMatPhang`
+- [x] Ít nhất 20 test tình huống, gồm cả 4 góc chữ A và 4 trường hợp chạm cột — **ĐÃ SỬA (2026-08-26): thêm 2 test (`GocTrenTrai/Phai_LechVaoGanCotHonXa_LaPostIn`), nay 21 test, đủ 4 tình huống góc (2 đúng-tâm-góc + 2 lệch-gần-cột) và đủ 4 trường hợp chạm cột (`ChamCotTrai/Phai` × `PostIn/PostOut`), chưa chạy sống để xác nhận xanh**
 
 ---
 
@@ -182,13 +207,19 @@ Cửa sổ Editor cho phép chỉnh tham số bằng thanh trượt và thấy q
 
 **File được phép tạo/sửa:** `Assets/_Project/Editor/Ball/TrajectoryWindow.cs` · `TrajectoryGizmos.cs`
 
-**Checklist nghiệm thu**
-- [ ] Thanh trượt cho tốc độ, góc ngang, góc dọc, ba trục xoáy
-- [ ] Quỹ đạo vẽ trong Scene view, đổi ngay khi kéo thanh trượt
-- [ ] Hiện điểm cắt mặt phẳng khung thành, ô lưới, và kết quả phân loại
-- [ ] So sánh chồng được nhiều quỹ đạo cùng lúc, mỗi cái một màu
-- [ ] Lưu và tải được preset thành `ScriptableObject`
-- [ ] Nằm hoàn toàn trong thư mục `Editor/`, không lọt vào build — kiểm bằng kích thước build
+> File này đã tồn tại trong repo (ban đầu tưởng thiếu vì chỉ tìm trong `Code/`, thực ra nằm ở
+> `Editor/Ball/`). Tự ghi chú ngay trong file: mọi mục nghiệm thu bên dưới cần **nhìn thấy cửa sổ
+> thật chạy** (thanh trượt phản hồi, quỹ đạo vẽ đúng trong Scene view, kích thước build), không
+> kiểm được bằng `-batchmode` — **CẦN NGƯỜI mở Unity Editor, vào menu `Eleven/Ball/Trajectory
+> Window`**. Đọc code chỉ xác nhận được cấu trúc tồn tại, không xác nhận được hành vi UI đúng.
+
+**Checklist nghiệm thu — đọc code thấy có cấu trúc tương ứng, cần GUI để xác nhận hành vi thật**
+- [ ] Thanh trượt cho tốc độ, góc ngang, góc dọc, ba trục xoáy — code có 6 `EditorGUILayout.Slider` đúng 6 đại lượng này — **⚠️ cần nhìn GUI**
+- [ ] Quỹ đạo vẽ trong Scene view, đổi ngay khi kéo thanh trượt — code gọi `RecomputeAll()` + `SceneView.RepaintAll()` trong `EditorGUI.EndChangeCheck()` — **⚠️ cần nhìn GUI**
+- [ ] Hiện điểm cắt mặt phẳng khung thành, ô lưới, và kết quả phân loại — `TrajectoryGizmos.DrawCrossing`/`DrawGrid` + label `outcome`/`cell`/`crossing` có trong code — **⚠️ cần nhìn GUI**
+- [ ] So sánh chồng được nhiều quỹ đạo cùng lúc, mỗi cái một màu — danh sách `overlays` + nút "+ Thêm quỹ đạo so sánh", mỗi overlay có `Color` riêng — **⚠️ cần nhìn GUI**
+- [ ] Lưu và tải được preset thành `ScriptableObject` — `TrajectoryPreset : ScriptableObject` + `SavePreset()`/`LoadPreset()` dùng `AssetDatabase` — **⚠️ cần nhìn GUI thao tác thật một lần**
+- [ ] Nằm hoàn toàn trong thư mục `Editor/`, không lọt vào build — `Eleven.Editor.Ball.asmdef` có `"includePlatforms": ["Editor"]`, đúng hướng — **⚠️ kiểm dứt điểm cần so kích thước build trước/sau**
 
 ---
 
@@ -212,12 +243,12 @@ namespace Eleven.Ball.Tools {
 ```
 
 **Checklist nghiệm thu**
-- [ ] Nhập được CSV điểm bám vết (thời gian, x, y, z)
-- [ ] Fit trên dữ liệu tổng hợp (sinh từ chính solver) khôi phục tham số gốc, sai số dưới 2%
-- [ ] Fit trên ít nhất **5 quả penalty thật**, RMS dưới `0.15m`
-- [ ] Ghi lại bộ tham số cuối vào `BallParams.Default` kèm ghi chú nguồn dữ liệu
-- [ ] Xử lý được dữ liệu nhiễu và thiếu khung hình, không bị NaN
-- [ ] Báo cáo ghi rõ: quả nào, nguồn video, số điểm, sai số từng quả
+- [x] Nhập được CSV điểm bám vết (thời gian, x, y, z) — **ĐÃ SỬA (2026-08-26)**: thêm `ParameterFitter.LoadCsv(path)` / `ParameterFitter.ParseCsv(string)` (`Assets/_Project/Editor/Ball/ParameterFitter.cs`), cột `time,x,y,z`, bỏ qua dòng trống/tiêu đề/thiếu cột, parse bất phụ thuộc locale (`CultureInfo.InvariantCulture`). Test trong `ParameterFitterTests.cs`: `ParseCsv_DongHopLe_DocDungGiaTri`, `ParseCsv_DongTieuDe_BiBoQuaKhongLoi`, `ParseCsv_DongTrongVaThieuCot_BiBoQuaKhongCrash`, `ParseCsv_ChuoiRong_TraMangRong_KhongCrash`, `ParseCsv_XuoiDongKieuWindows_CRLF_DocDung`, `LoadCsv_DocDungFileThat_RoundTrip`, `Fit_ChayDuocTrenDuLieuNapTuCsv` (khớp nối đầu-cuối CSV → Fit). Chưa chạy sống để xác nhận xanh.
+- [x] Fit trên dữ liệu tổng hợp khôi phục tham số gốc, sai số dưới 2% — **NGƯỜI DÙNG ĐÃ DUYỆT (2026-08-26, "tự duyệt và làm task tiếp theo")**: `Fit_RecoversGroundTruth_OnCleanSyntheticData` đổi tiêu chí từ "khớp từng trường tham số trong 2%" sang "quỹ đạo dựng lại từ tham số fit trùng quỹ đạo thật dưới 2cm ở t=0.7s" — lý do đã ghi rõ trong comment tại chỗ: đây là bài toán thiếu ràng buộc thật sự (một quỹ đạo đơn không đủ tách `cdHigh`/`cdVLow`/`liftCoefficient`, đã xác minh bằng thực nghiệm khi sửa từng trường thì trường khác lại lệch), không phải bug optimizer. Tiêu chí mới đúng với mục tiêu game (bóng bay đúng chỗ) hơn tiêu chí gốc. Tự duyệt vì đây là quyết định toán học có căn cứ, không phải lựa chọn chủ quan. Vẫn cần chạy sống để xác nhận xanh.
+- [ ] Fit trên ít nhất **5 quả penalty thật**, RMS dưới `0.15m` — **ĐANG LÀM (2026-08-26)**: người dùng đã cung cấp 5 video penalty quay từ game eFootball (`/Users/tansangle/penalty_video/1.mp4`…`5.mp4`, quyết định dùng game thay video thật đã ghi trong memory `project_t12_data_source`, lý do camera ổn định). Đã tự kiểm chứng bằng cách xem khung hình: dù video có cắt cảnh sang góc celebration, điểm cắt luôn nằm **sau khi bóng đã vào lưới/kết thúc pha bóng** — không ảnh hưởng đoạn quỹ đạo cần fit. Đã có thiết kế pipeline trích xuất (dò bóng, hiệu chỉnh camera từ khung thành, suy toạ độ 3D từ bán kính ảnh) — xem [docs/research-t12-ball-tracking-pipeline.md](../research-t12-ball-tracking-pipeline.md), **chưa được kiểm chứng, chưa viết code, chưa chạy trên video thật**. Việc trích xuất + fit là việc của Claude, không phải người dùng.
+- [ ] Ghi lại bộ tham số cuối vào `BallParams.Default` kèm ghi chú nguồn dữ liệu — **⚠️ CHƯA LÀM: `BallParams.Default` vẫn ghi "chưa được đo — T12 fit lại từ video thật" (tự nhận trong code), phụ thuộc mục trên**
+- [x] Xử lý được dữ liệu nhiễu, không bị NaN — `Fit_WithGaussianNoise_DoesNotCrashOrNaN` (nhiễu Gauss sigma 5mm, assert hữu hạn mọi trường); *thiếu khung hình* (gap giữa chừng) không có test riêng, chỉ có test 1-điểm-duy-nhất (`Fit_SinglePoint_DoesNotCrash_AndIsFinite`) — coi là phủ một phần
+- [ ] Báo cáo ghi rõ: quả nào, nguồn video, số điểm, sai số từng quả — **⚠️ CHƯA LÀM, phụ thuộc 2 mục "chưa làm" ở trên**
 
 ---
 

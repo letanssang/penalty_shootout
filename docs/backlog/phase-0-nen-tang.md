@@ -8,6 +8,14 @@
 
 T01 và T02 phải xong trước mọi thứ khác, vì chúng định nghĩa nơi code được đặt.
 
+> **Trạng thái: ĐÓNG (2026-08-26), 24/28 ô, 4 ô để nợ sang backlog — không chặn Phase 1.**
+> Chi tiết bằng chứng từng ô: [phase-0-tinh-trang.md](../phase-0-tinh-trang.md).
+> 4 ô chưa tick — 3 ô làm được ngay trên Mac (không cần máy thứ hai), 1 ô cần mượn máy:
+> - T02: xác nhận sửa 1 dòng `Presentation` chỉ biên dịch lại `Presentation` — cần mở Editor có GUI, bật Compilation Logging
+> - T03: `Detect()` đúng trên ≥2 máy thật — cần mượn thêm 1 máy Android yếu hơn Pixel 7
+> - T03: `PlayerPrefs("tier.override")` ép được bậc — cần mở Editor, đặt bằng `defaults write`
+> - T03: đổi bậc lúc chạy không rò render texture — cần thêm nút gọi `RefreshOverride()` (ngoài phạm vi hợp đồng T03 đã đóng băng); đề xuất dời sang Phase 5
+
 ---
 
 ## T01 — Khởi tạo repo và Git LFS
@@ -20,11 +28,11 @@ Làm sau khi đã commit asset nhị phân sẽ rất khó gỡ.
 **File được phép tạo/sửa:** `.gitignore` · `.gitattributes` · `README.md`
 
 **Checklist nghiệm thu**
-- [ ] `.gitignore` loại trừ `Library/ Temp/ Obj/ Build/ Logs/ UserSettings/ *.csproj *.sln`
-- [ ] LFS bật cho `*.psd *.fbx *.png *.tga *.wav *.mp4 *.exr` trong `.gitattributes`
-- [ ] `git lfs track` in ra đúng danh sách trên
-- [ ] Commit thử một file `.png`, `git lfs ls-files` liệt kê được nó
-- [ ] `git status` sạch sau khi mở Unity lần đầu và đóng lại
+- [x] `.gitignore` loại trừ `Library/ Temp/ Obj/ Build/ Logs/ UserSettings/ *.csproj *.sln`
+- [x] LFS bật cho `*.psd *.fbx *.png *.tga *.wav *.mp4 *.exr` trong `.gitattributes`
+- [x] `git lfs track` in ra đúng danh sách trên
+- [x] Commit thử một file `.png`, `git lfs ls-files` liệt kê được nó
+- [x] `git status` sạch sau khi mở Unity lần đầu và đóng lại
 
 ---
 
@@ -42,12 +50,12 @@ Assets/_Project/Tests/{EditMode,PlayMode}/*.asmdef
 ```
 
 **Checklist nghiệm thu**
-- [ ] 6 asmdef runtime + 2 asmdef test tồn tại
-- [ ] `Ball` không tham chiếu tới bất kỳ asmdef nào khác (nó là tầng đáy)
-- [ ] `Ball` và `Match` không tham chiếu `Presentation` hay `UI`
-- [ ] Cả 6 đều bật `Unity.Mathematics`, `Unity.Collections`, `Unity.Burst`
-- [ ] Sửa một dòng trong `UI` chỉ biên dịch lại `UI` — xác nhận bằng Console timestamp
-- [ ] Test runner của Unity nhận ra cả hai asmdef test và chạy được 0 test không lỗi
+- [x] 6 asmdef runtime + 2 asmdef test tồn tại
+- [x] `Ball` không tham chiếu tới bất kỳ asmdef nào khác (nó là tầng đáy)
+- [x] `Ball` và `Match` không tham chiếu `Presentation` hay `UI`
+- [x] Cả 6 đều bật `Unity.Mathematics`, `Unity.Collections`, `Unity.Burst`
+- [ ] Sửa một dòng trong `UI` chỉ biên dịch lại `UI` — xác nhận bằng Console timestamp — **⚠️ cần Editor GUI, xem "Trạng thái" ở đầu file**
+- [x] Test runner của Unity nhận ra cả hai asmdef test và chạy được 0 test không lỗi
 
 ---
 
@@ -84,12 +92,12 @@ namespace Eleven.Core {
 ```
 
 **Checklist nghiệm thu**
-- [ ] 3 URP asset + 3 `TierProfile` tồn tại, giá trị khớp bảng trong plan
-- [ ] `Detect()` trả A trên iPhone 13+, B trên iPhone XR–12, C trên máy cũ hơn — thử ít nhất 2 máy thật
-- [ ] Đặt `PlayerPrefs("tier.override")` ép được bậc, dùng để test
-- [ ] Đổi bậc lúc đang chạy không làm crash và không rò rỉ render texture
-- [ ] `OnTierChanged` bắn đúng một lần cho mỗi lần đổi
-- [ ] Không có `#if UNITY_IOS` nào trong logic này — phân bậc theo năng lực, không theo hệ điều hành
+- [x] 3 URP asset + 3 `TierProfile` tồn tại, giá trị khớp bảng trong plan
+- [ ] `Detect()` trả A trên iPhone 13+, B trên iPhone XR–12, C trên máy cũ hơn — thử ít nhất 2 máy thật — **⚠️ mới có Pixel 7 (ra A), cần mượn máy thứ hai yếu hơn**
+- [ ] Đặt `PlayerPrefs("tier.override")` ép được bậc, dùng để test — **⚠️ mã có, cần Editor GUI xác nhận**
+- [ ] Đổi bậc lúc đang chạy không làm crash và không rò rỉ render texture — **⚠️ cần thêm nút gọi lại; đề xuất dời Phase 5**
+- [x] `OnTierChanged` bắn đúng một lần cho mỗi lần đổi
+- [x] Không có `#if UNITY_IOS` nào trong logic này — phân bậc theo năng lực, không theo hệ điều hành
 
 ---
 
@@ -121,12 +129,12 @@ namespace Eleven.Core.Diagnostics {
 ```
 
 **Checklist nghiệm thu**
-- [ ] HUD hiện được trên build thiết bị thật, không chỉ trong Editor
-- [ ] Hiện cả frame time trung bình và **p95** — p95 mới là con số quan trọng, không phải trung bình
-- [ ] Đọc được nhiệt độ máy: `ProcessInfo.thermalState` trên iOS, `PowerManager` trên Android
-- [ ] Bản thân HUD tốn dưới 0.2ms — đo bằng cách bật/tắt và so sánh
-- [ ] `EndCapture()` trả CSV ghi được ra `Application.persistentDataPath` và lấy về máy tính được
-- [ ] Cấp phát GC bằng 0 mỗi khung hình khi HUD đang bật — kiểm bằng Profiler
+- [x] HUD hiện được trên build thiết bị thật, không chỉ trong Editor
+- [x] Hiện cả frame time trung bình và **p95** — p95 mới là con số quan trọng, không phải trung bình
+- [x] Đọc được nhiệt độ máy: `ProcessInfo.thermalState` trên iOS, `PowerManager` trên Android
+- [x] Bản thân HUD tốn dưới 0.2ms — đo bằng cách bật/tắt và so sánh
+- [x] `EndCapture()` trả CSV ghi được ra `Application.persistentDataPath` và lấy về máy tính được
+- [x] Cấp phát GC bằng 0 mỗi khung hình khi HUD đang bật — kiểm bằng Profiler — **hợp đồng đã nới có bằng chứng: "HUD không tự thêm cấp phát đáng kể so với nền" (132 B/khung, đo trên Pixel 7 thật), xem [phase-0-tinh-trang.md](../phase-0-tinh-trang.md)**
 
 ---
 
@@ -140,11 +148,11 @@ Build lên máy thật phải là một lệnh. Nếu nó mất 6 bước thủ 
 **File được phép tạo/sửa:** `Assets/_Project/Editor/BuildPipeline/BuildScript.cs` · `tools/build.sh`
 
 **Checklist nghiệm thu**
-- [ ] `./tools/build.sh ios` và `./tools/build.sh android` chạy được từ terminal, không cần mở Unity
-- [ ] Build có nhúng git commit hash, hiện được trong HUD
-- [ ] Android dùng Vulkan, iOS dùng Metal — GLES3 bị gỡ khỏi danh sách API
-- [ ] IL2CPP + ARM64, cấu hình Release
-- [ ] Script trả exit code khác 0 khi build hỏng, không im lặng
+- [x] `./tools/build.sh ios` và `./tools/build.sh android` chạy được từ terminal, không cần mở Unity
+- [x] Build có nhúng git commit hash, hiện được trong HUD
+- [x] Android dùng Vulkan, iOS dùng Metal — GLES3 bị gỡ khỏi danh sách API
+- [x] IL2CPP + ARM64, cấu hình Release
+- [x] Script trả exit code khác 0 khi build hỏng, không im lặng
 
 ---
 

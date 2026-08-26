@@ -171,22 +171,37 @@ namespace Eleven.Tests.PlayMode
         {
             const int warm = 30, sample = 180;
 
-            PerfHud.Visible = false;
-            for (int i = 0; i < warm; i++) yield return null;
-            float sumOff = 0f;
-            for (int i = 0; i < sample; i++) { yield return null; sumOff += PerfHud.Current.totalMs; }
-            float avgOff = sumOff / sample;
+            // Khoá vsync (~33ms ở 30fps) nuốt hết chi phí thật của HUD vào thời gian chờ,
+            // làm phép đo không phân giải nổi — đo thật trên Pixel 7: chênh chỉ 0.0001ms dù
+            // cả hai vế đều ~33.3ms. Tắt vsync trong đúng phạm vi bài test này để đo CPU thật.
+            int vsyncCu = QualitySettings.vSyncCount;
+            int fpsCu = Application.targetFrameRate;
+            QualitySettings.vSyncCount = 0;
+            Application.targetFrameRate = -1;
+            try
+            {
+                PerfHud.Visible = false;
+                for (int i = 0; i < warm; i++) yield return null;
+                float sumOff = 0f;
+                for (int i = 0; i < sample; i++) { yield return null; sumOff += PerfHud.Current.totalMs; }
+                float avgOff = sumOff / sample;
 
-            PerfHud.Visible = true;
-            for (int i = 0; i < warm; i++) yield return null;
-            float sumOn = 0f;
-            for (int i = 0; i < sample; i++) { yield return null; sumOn += PerfHud.Current.totalMs; }
-            float avgOn = sumOn / sample;
+                PerfHud.Visible = true;
+                for (int i = 0; i < warm; i++) yield return null;
+                float sumOn = 0f;
+                for (int i = 0; i < sample; i++) { yield return null; sumOn += PerfHud.Current.totalMs; }
+                float avgOn = sumOn / sample;
 
-            float delta = avgOn - avgOff;
-            Debug.Log($"[T04 THIET BI] frame tat HUD={avgOff:F4}ms bat HUD={avgOn:F4}ms chenh={delta:F4}ms");
+                float delta = avgOn - avgOff;
+                Debug.Log($"[T04 THIET BI] frame (vsync tat) tat HUD={avgOff:F4}ms bat HUD={avgOn:F4}ms chenh={delta:F4}ms");
 
-            Assert.Less(delta, 0.2f, "Bản thân HUD phải tốn dưới 0.2ms mỗi khung");
+                Assert.Less(delta, 0.2f, "Bản thân HUD phải tốn dưới 0.2ms mỗi khung");
+            }
+            finally
+            {
+                QualitySettings.vSyncCount = vsyncCu;
+                Application.targetFrameRate = fpsCu;
+            }
         }
 
         // ─── T04: cấp phát GC mỗi khung khi HUD đang bật ───

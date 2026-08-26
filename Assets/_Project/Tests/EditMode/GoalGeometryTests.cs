@@ -146,22 +146,44 @@ namespace Eleven.Tests.EditMode
             Assert.AreEqual(ShotOutcome.Crossbar, outcome);
         }
 
-        // ─── 12-13. Bốn góc chữ A: hai góc trên (cột gặp xà) phải nhất quán Crossbar hoặc PostIn/Out ───
+        // ─── 12-15. Bốn góc chữ A: đúng tâm góc (cột gặp xà, đồng khoảng cách) và ngay
+        // sát trong góc (gần cột hơn xà) phải nhất quán, cho cả trái lẫn phải ───
 
         [Test]
-        public void GocTrenTrai_CotGapXa_KhongPhaiGoalHayWide()
+        public void GocTrenTrai_DungTamGoc_CotGapXa_KhongPhaiGoalHayWide()
         {
+            // Nhắm đúng tâm góc (giao đường tâm cột và đường tâm xà) — khoảng cách tới
+            // cột và tới xà bằng nhau (=0), DistancePointToSegment hoà nên xà thắng (<=).
             var outcome = GoalGeometry.Classify(StraightShotTo(-(W * 0.5f + R), H + R), NoForceParams(), out _, out _);
             Assert.That(outcome == ShotOutcome.Crossbar || outcome == ShotOutcome.PostOut,
-                $"Góc trên-trái (cột gặp xà) phải là Crossbar hoặc PostOut, nhận được {outcome}");
+                $"Góc trên-trái, đúng tâm góc, phải là Crossbar hoặc PostOut, nhận được {outcome}");
         }
 
         [Test]
-        public void GocTrenPhai_CotGapXa_KhongPhaiGoalHayWide()
+        public void GocTrenPhai_DungTamGoc_CotGapXa_KhongPhaiGoalHayWide()
         {
             var outcome = GoalGeometry.Classify(StraightShotTo(W * 0.5f + R, H + R), NoForceParams(), out _, out _);
             Assert.That(outcome == ShotOutcome.Crossbar || outcome == ShotOutcome.PostOut,
-                $"Góc trên-phải (cột gặp xà) phải là Crossbar hoặc PostOut, nhận được {outcome}");
+                $"Góc trên-phải, đúng tâm góc, phải là Crossbar hoặc PostOut, nhận được {outcome}");
+        }
+
+        [Test]
+        public void GocTrenTrai_LechVaoGanCotHonXa_LaPostIn()
+        {
+            // Lệch xuống dưới đường tâm xà (2.3 < CrossbarCenterY=2.5) nhưng vẫn sát cột
+            // (x=-3.65) — khoảng cách tới cột (0.07) < khoảng cách tới xà (~0.2) → cột thắng,
+            // và điểm vẫn nằm trong biên khung (x>=-3.66, y<=2.44) → PostIn, không phải Crossbar.
+            var outcome = GoalGeometry.Classify(StraightShotTo(-3.65f, 2.3f), NoForceParams(), out _, out _);
+            Assert.AreEqual(ShotOutcome.PostIn, outcome,
+                "Góc trên-trái, lệch vào gần cột hơn xà, phải phân loại là PostIn");
+        }
+
+        [Test]
+        public void GocTrenPhai_LechVaoGanCotHonXa_LaPostIn()
+        {
+            var outcome = GoalGeometry.Classify(StraightShotTo(3.65f, 2.3f), NoForceParams(), out _, out _);
+            Assert.AreEqual(ShotOutcome.PostIn, outcome,
+                "Góc trên-phải, lệch vào gần cột hơn xà, phải phân loại là PostIn");
         }
 
         // ─── 14. Biên đúng mép trong cột x=3.66: phân loại nhất quán, không dao động ───

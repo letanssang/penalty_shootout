@@ -1,4 +1,7 @@
 using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
 using Unity.Mathematics;
 
 namespace Eleven.Ball.Tools
@@ -11,6 +14,54 @@ namespace Eleven.Ball.Tools
 
     public static class ParameterFitter
     {
+        /// <summary>
+        /// Đọc điểm bám vết từ file CSV, cột theo thứ tự "time,x,y,z". Bọc quanh
+        /// <see cref="ParseCsv"/> — tách riêng để test được phần phân tích cú pháp mà
+        /// không cần ghi file thật.
+        /// </summary>
+        public static TrackedPoint[] LoadCsv(string path)
+        {
+            return ParseCsv(File.ReadAllText(path));
+        }
+
+        /// <summary>
+        /// Phân tích nội dung CSV "time,x,y,z" thành mảng <see cref="TrackedPoint"/>.
+        /// Dòng trống, dòng tiêu đề (không parse được số ở cột đầu), và dòng thiếu cột
+        /// đều bị bỏ qua thay vì ném lỗi — dữ liệu quay tay từ video thường có vài dòng
+        /// hỏng. Luôn dùng <see cref="CultureInfo.InvariantCulture"/> để không phụ thuộc
+        /// dấu thập phân theo locale máy (vd máy VN dùng dấu phẩy).
+        /// </summary>
+        public static TrackedPoint[] ParseCsv(string csvContent)
+        {
+            if (string.IsNullOrEmpty(csvContent)) return Array.Empty<TrackedPoint>();
+
+            var lines = csvContent.Split('\n');
+            var points = new List<TrackedPoint>(lines.Length);
+
+            foreach (var raw in lines)
+            {
+                var line = raw.Trim().TrimEnd('\r');
+                if (line.Length == 0) continue;
+
+                var cols = line.Split(',');
+                if (cols.Length < 4) continue;
+
+                if (!TryParseFloat(cols[0], out float time)) continue; // vd dòng tiêu đề "time,x,y,z"
+                if (!TryParseFloat(cols[1], out float x)) continue;
+                if (!TryParseFloat(cols[2], out float y)) continue;
+                if (!TryParseFloat(cols[3], out float z)) continue;
+
+                points.Add(new TrackedPoint { time = time, position = new float3(x, y, z) });
+            }
+
+            return points.ToArray();
+        }
+
+        static bool TryParseFloat(string s, out float value)
+        {
+            return float.TryParse(s.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out value);
+        }
+
         private const float Dt = 1f / 240f;
         private const int MaxSteps = 4096;
 

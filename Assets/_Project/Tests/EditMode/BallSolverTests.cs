@@ -1,4 +1,6 @@
 using NUnit.Framework;
+using UnityEngine.TestTools.Constraints;   // gop extension AllocatingGCMemory()
+using Is = NUnit.Framework.Is;             // khu nhap nhang voi lop Is cua Unity
 using Unity.Mathematics;
 using Eleven.Ball;
 
@@ -626,6 +628,50 @@ namespace Eleven.Tests.EditMode
                 Assert.Greater(spinSau1s, 0f,
                     "Spin không nên giảm về 0 hoàn toàn sau chỉ 1 giây (trừ khi decay = 1)");
             }
+        }
+
+        // ─── 17. Cấp phát bộ nhớ bằng 0 — Step và Integrate đều là hàm thuần trên struct ───
+
+        [Test]
+        public void Step_KhongCapPhat()
+        {
+            var p = DefaultParams();
+            var s = new BallState
+            {
+                position = float3.zero,
+                velocity = new float3(3f, 8f, 25f),
+                spin = new float3(10f, -20f, 5f)
+            };
+            float dt = 1f / 120f;
+
+            // Gọi trước một lần ngoài Assert để loại trừ JIT warm-up khỏi phép đo cấp phát
+            BallSolver.Step(s, p, dt);
+
+            Assert.That(() =>
+            {
+                BallSolver.Step(s, p, dt);
+            }, Is.Not.AllocatingGCMemory());
+        }
+
+        [Test]
+        public void Integrate_KhongCapPhat()
+        {
+            var p = DefaultParams();
+            var s = new BallState
+            {
+                position = float3.zero,
+                velocity = new float3(3f, 8f, 25f),
+                spin = new float3(10f, -20f, 5f)
+            };
+            float dt = 1f / 120f;
+            float totalTime = 0.5f;
+
+            BallSolver.Integrate(s, p, totalTime, dt);
+
+            Assert.That(() =>
+            {
+                BallSolver.Integrate(s, p, totalTime, dt);
+            }, Is.Not.AllocatingGCMemory());
         }
     }
 }

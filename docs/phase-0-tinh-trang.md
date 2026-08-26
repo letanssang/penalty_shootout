@@ -4,8 +4,9 @@
 
 ## Trả lời ngắn
 
-**Phase 0 coi như xong về mặt code/nghiệm thu trên 1 máy thật — chỉ còn thiếu máy thứ
-hai (bậc B/C) để đóng nốt phần "kiểm trên ≥2 máy thật".**
+**Phase 0: ĐÓNG (2026-08-26), 24/28 ô, chuyển sang Phase 1.** 4 ô còn lại (1 cần máy
+thứ hai bậc B/C, 3 cần bấm tay trong Unity Editor) để nợ trong backlog, không chặn
+Phase 1 — xem mục "Phase 0: ĐÓNG" ở cuối file.
 
 T01, T02, T05 đạt trọn vẹn (**cả hai nền tảng — Android APK chạy trên máy thật, iOS ra
 Xcode project sạch**). T03 và T07 đạt trên phần cứng thật. T04 nay đạt **6/6 ô** — ô cuối
@@ -241,13 +242,24 @@ khâu kiểm tra PlayerSettings của iOS. Không lượt build nào cho nền t
 
 ---
 
-## Còn lại để đóng Phase 0
+## Phase 0: ĐÓNG (2026-08-26)
 
-1. ~~Quyết hướng cho ô GC~~ — **xong 2026-08-26**, xem mục "Ô đã đóng: GC" ở trên.
-2. **Mượn máy thứ hai** ở bậc B hoặc C để đóng ô "`Detect()` đúng trên ≥2 máy".
-3. Kiểm `tier.override` và việc đổi bậc lúc chạy trên máy — cần Profiler nối vào máy.
-4. Đặt `applicationIdentifier` trước khi nghĩ tới store.
-5. Vá recorder texture memory trên Android.
+24/28 ô nghiệm thu đạt, có bằng chứng. Quyết định: đóng Phase 0 và chuyển sang Phase 1
+ngay — 4 ô còn lại không chặn Phase 1 (T06–T09 của Phase 1 đã có code + test trong repo),
+để nợ lại trong backlog, làm dần không cần dừng tiến độ. Checklist gốc đã tick tại
+[phase-0-nen-tang.md](backlog/phase-0-nen-tang.md).
+
+**4 ô để nợ:**
+
+1. **Mượn máy thứ hai** ở bậc B hoặc C để đóng ô "`Detect()` đúng trên ≥2 máy" — cần phần cứng, không làm được từ xa.
+2. Xác nhận "sửa 1 dòng `Presentation` chỉ biên dịch lại `Presentation`" — cần mở Unity Editor có GUI (không cần máy khác), xem Nhóm C1 trong [huong-dan-dong-phase-0.md](huong-dan-dong-phase-0.md).
+3. Kiểm `tier.override` bằng `defaults write` — cần mở Unity Editor có GUI, xem Nhóm C2.
+4. Đổi bậc lúc chạy không rò render texture — cần thêm nút gọi `RefreshOverride()` (ngoài phạm vi hợp đồng T03 đã đóng băng); đề xuất dời sang Phase 5, xem Nhóm C3.
+
+**Việc lặt vặt khác, không phải ô nghiệm thu Phase 0 nhưng nên nhớ:**
+
+5. Đặt `applicationIdentifier` trước khi nghĩ tới store.
+6. Vá recorder texture memory trên Android.
 
 ---
 

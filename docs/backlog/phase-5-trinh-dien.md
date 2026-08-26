@@ -18,6 +18,20 @@ Phần còn lại của M4 — quyết định "đã đẹp chưa" — là việ
 Cinemachine 3, chuyển góc theo pha của lượt sút. Ràng buộc camera là **trụ cột thiết kế**,
 không phải hạn chế kỹ thuật — chiến lược "chỉ dựng 12m" sụp đổ ngay khi có camera tự do 360°.
 
+> **Quyết định 2026-08-26 (người dùng):** giai đoạn đầu **camera đứng yên** — một góc cố định
+> duy nhất cho pha ngắm+sút, không dolly, không lia. Lý do: mọi phép quy đổi cử chỉ vuốt →
+> điểm ngắm trên khung thành trở thành một phép chiếu **hằng số**, tính một lần lúc khởi tạo,
+> không phải tính lại mỗi khung hình.
+> **Nhưng thiết kế phải mở**: không được hard-code ma trận chiếu vào chỗ ánh xạ. Ràng buộc cụ thể:
+> - Phép quy đổi màn hình → điểm ngắm phải đi qua một chỗ duy nhất nhận `Camera` (hoặc ma trận
+>   view-projection) làm **tham số truyền vào**, không đọc `Camera.main` rải rác.
+> - Chỗ đó phải chịu được ma trận thay đổi giữa các khung hình; camera đứng yên chỉ là trường
+>   hợp riêng "ma trận không đổi", không phải giả định được phép bake cứng.
+> - `ICameraDirector` giữ nguyên như thiết kế; giai đoạn đầu chỉ hiện thực **một** `CameraShot`.
+>
+> Hệ quả sang T14: `ShotMapper` nhận điểm ngắm ở **không gian thế giới** đã quy đổi sẵn,
+> không tự đọc camera — nhờ vậy đổi sang camera động sau này không phải sửa `ShotMapper`.
+
 ```csharp
 namespace Eleven.Presentation {
   public enum CameraShot { Broadcast, BehindShooter, KeeperPOV,

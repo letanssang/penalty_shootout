@@ -34,12 +34,27 @@ namespace Eleven.Shooter {
 ```
 
 **Checklist nghiệm thu**
-- [ ] Lấy mẫu độc lập với tốc độ khung hình — 30fps và 60fps cho `curvature` chênh dưới 5%
-- [ ] `curvature` tính bằng diện tích có dấu giữa đường vuốt và dây cung, chuẩn hoá theo độ dài
-- [ ] Vuốt thẳng cho `curvature` gần 0 và `straightness` gần 1
-- [ ] Lọc nhiễu ngón tay bằng làm mượt, nhưng không làm mất độ cong thật
-- [ ] Vuốt dưới 3 mẫu bị từ chối, không làm crash
-- [ ] Chuẩn hoá theo DPI — cùng cử chỉ vật lý trên iPhone SE và iPad cho kết quả gần nhau
+
+> **ĐÃ CHẠY TEST SỐNG 2026-08-26** — không còn là đọc code tĩnh nữa.
+> Lệnh: `Unity 6000.3.22f1 -batchmode -nographics -runTests -testPlatform EditMode`.
+> Kết quả toàn dự án: **141/141 xanh, 0 đỏ, 0 bỏ qua** (79.5s).
+>
+> Trước lần chạy này **toàn bộ EditMode suite chưa từng biên dịch được** — 3 lỗi CS trong
+> `ParameterFitterTests.cs` (thiếu `using System;` cho `FormattableString`) và
+> `BallSolverTests.cs` (`AllocatingGCMemory` là extension method trong
+> `UnityEngine.TestTools.Constraints`, thiếu `using`; import cả namespace lại đụng tên lớp
+> `Is` của NUnit nên phải thêm alias `using Is = NUnit.Framework.Is;`). Đã sửa.
+> Vì vậy MỌI khẳng định "test xanh" trong backlog trước ngày này đều chỉ là đọc code.
+>
+> Mục DPI trước đây là GAP thật, **nay đã lấp**: thêm `PhysicalUnits` + `SwipeCollector`
+> (chuẩn hoá tại biên thu thập, `SwipeAnalyzer` giữ nguyên thuần toán trên đơn vị cm).
+
+- [x] Lấy mẫu độc lập với tốc độ khung hình — 30fps và 60fps cho `curvature` chênh dưới 5% — **XANH 2026-08-26**: `FrameRateIndependence_CurvatureDiffersUnderFivePercent` + `FrameRateIndependence_PeakSpeedSimilar`
+- [x] `curvature` tính bằng diện tích có dấu giữa đường vuốt và dây cung, chuẩn hoá theo độ dài — **XANH 2026-08-26**: `ArcToTheRight_CurvaturePositive`, `ArcToTheLeft_CurvatureNegative`, `ClearArc_CurvatureSignificantlyNonZero`, `LengthIsArcLengthNotChordDistance`, `Semicircle_LengthMatchesHalfCircumference`
+- [x] Vuốt thẳng cho `curvature` gần 0 và `straightness` gần 1 — **XANH 2026-08-26**: `StraightLine_CurvatureNearZero_StraightnessNearOne`
+- [ ] Lọc nhiễu ngón tay bằng làm mượt, nhưng không làm mất độ cong thật — bộ lọc trung bình 3 điểm có thật và các test gián tiếp (`ClearArc_...`, `ArcToTheRight/Left_...`) đều **xanh 2026-08-26**, không thấy dấu hiệu cong bị san phẳng — **VẪN CHƯA TICK: thiếu test TRỰC TIẾP so sánh có/không nhiễu trên dữ liệu tổng hợp** (đang làm), và chưa có test với nhiễu ngón tay thật
+- [x] Vuốt dưới 3 mẫu bị từ chối, không làm crash — **XANH 2026-08-26**: `ZeroSamples_DoesNotCrash_AllZeros`, `OneSample_DoesNotCrash_StartEqualsEnd`, `TwoSamples_DoesNotCrash_StartEndCorrect_NoCrashFeatures`, `DegenerateAllSamePoint_NoNaNs`, và ở lớp thu: `End_WithLessThanThreeSamples_ReturnsTooFewSamples`
+- [x] Chuẩn hoá theo DPI — cùng cử chỉ vật lý trên iPhone SE và iPad cho kết quả gần nhau — **XANH 2026-08-26**: `PhysicalInvariance_SamePhysicalSwipeOnDifferentDevices_YieldsIdenticalFeatures` dựng cùng một cung cong 4cm trên hai máy giả lập 326ppi/264ppi, `length` chênh dưới 1%. Hiện thực: [PhysicalUnits.cs](../../Assets/_Project/Code/Shooter/PhysicalUnits.cs) (toán thuần tách khỏi `Screen` để test được, DPI hỏng → dự phòng 290, kẹp [100,700]) + [SwipeCollector.cs](../../Assets/_Project/Code/Shooter/SwipeCollector.cs) (chốt hệ số k một lần mỗi vuốt, `NativeArray` cấp phát một lần tái dùng). Còn nợ: lớp input phía trên chưa tồn tại — xem `FlipYToBottomLeft` và hợp đồng gốc toạ độ trong `SwipeCollector.Begin`
 
 ---
 
@@ -49,6 +64,12 @@ namespace Eleven.Shooter {
 
 Toàn bộ đường cong ánh xạ phải nằm trong `ScriptableObject`, không hard-code.
 Bạn sẽ chỉnh nó hàng chục lần.
+
+> **Ràng buộc từ quyết định camera 2026-08-26** (chi tiết ở [T26](phase-5-trinh-dien.md#t26-đạo-diễn-camera)):
+> giai đoạn đầu camera **đứng yên**, nên phép chiếu màn hình → điểm ngắm là hằng số.
+> Nhưng `ShotMapper` **không được tự đọc camera**: nó nhận `aimPoint` đã ở **không gian thế giới**,
+> do một chỗ quy đổi riêng (nhận `Camera`/ma trận view-projection làm tham số) tính sẵn.
+> Nhờ vậy khi chuyển sang camera động, `ShotMapper` không phải sửa một dòng nào.
 
 ```csharp
 namespace Eleven.Shooter {
