@@ -6,24 +6,27 @@ using Eleven.Ball;
 namespace Eleven.Shooter
 {
     /// <summary>
-    /// Component nhận diện cử chỉ vuốt từ màn hình cảm ứng hoặc chuột trên PC.
-    /// Sử dụng phép chiếu Raycast Camera chuẩn xác vào mặt phẳng khung thành (Z = 11.0m)
-    /// Đảm bảo vuốt trúng điểm nào trên màn hình, bóng sẽ bay CHÍNH XÁC 100% vào điểm đó trong không gian 3D.
+    /// Component thu thập và phân tích cử chỉ vuốt hoàn chỉnh:
+    /// - Sử dụng SwipeCollector chuẩn hoá DPI và thu thập mẫu thời gian thực
+    /// - Chạy SwipeAnalyzer phân tích các đặc trưng cử chỉ (Curvature, Straightness, PeakSpeed)
+    /// - Chiếu tia AimProjector qua Camera tới mặt phẳng khung thành (Z = 11.0m)
+    /// - Sử dụng ShotMapper phân loại 4 kiểu sút (Má trong, Knuckleball, Lốp bóng Panenka, Mu bàn chân)
+    /// - Bộ giải quỹ đạo bù trừ khí động học (Aerodynamic Inversion Solver) đảm bảo bóng bay đúng ý đồ
     /// </summary>
     public sealed class TouchSwipeReceiver : MonoBehaviour
     {
-        public event Action<float3, float3> OnShotFired; // (launchVelocity, spin)
+        public event Action<ShotIntent, float3> OnShotFired;
 
-        [Header("Tùy chỉnh lực và độ nhạy")]
-        [SerializeField] private float minSpeed = 22f;
-        [SerializeField] private float maxSpeed = 34f;
-        [SerializeField] private float maxSwipeTime = 1.0f;
-        [SerializeField] private float minSwipeDistPixels = 20f;
+        [Header("Cấu hình ánh xạ cử chỉ")]
+        [SerializeField] private ShotMappingConfig mappingConfig;
 
-        private Vector2 startPos;
-        private float startTime;
+        [Header("Độ nhạy & Giới hạn")]
+        [SerializeField] private float minSwipeDistCm = 0.5f;
+
+        private SwipeCollector collector;
         private bool isSwiping;
         private bool isInputEnabled = true;
+        private uint kickSeed = 1001;
 
         public bool IsInputEnabled
         {
@@ -31,88 +34,139 @@ namespace Eleven.Shooter
             set => isInputEnabled = value;
         }
 
+        public ShotMappingConfig Config
+        {
+            get => mappingConfig != null ? mappingConfig : (mappingConfig = ShotMappingConfig.CreateDefault());
+            set => mappingConfig = value;
+        }
+
+        private void Awake()
+        {
+            collector = new SwipeCollector(256);
+            if (mappingConfig == null)
+            {
+                mappingConfig = ShotMappingConfig.CreateDefault();
+            }
+        }
+
+        private void OnDestroy()
+        {
+            collector?.Dispose();
+            collector = null;
+        }
+
         private void Update()
         {
             if (!isInputEnabled) return;
 
-            // Xử lý Touch trên Mobile hoặc Chuột trên PC
+            float dpi = PhysicalUnits.Dpi;
+            float time = Time.time;
+
+            // 1. Bắt đầu vuốt (Touch Down / Mouse Down)
             if (Input.GetMouseButtonDown(0))
             {
-                startPos = Input.mousePosition;
-                startTime = Time.time;
+                float2 screenPos = new float2(Input.mousePosition.x, Input.mousePosition.y);
+                collector.Begin(screenPos, time, dpi);
                 isSwiping = true;
             }
+            // 2. Di chuyển ngón tay (Drag / Move)
+            else if (Input.GetMouseButton(0) && isSwiping)
+            {
+                float2 screenPos = new float2(Input.mousePosition.x, Input.mousePosition.y);
+                collector.Move(screenPos, time);
+            }
+            // 3. Nhấc ngón tay (Touch Up / Mouse Up)
             else if (Input.GetMouseButtonUp(0) && isSwiping)
             {
                 isSwiping = false;
-                Vector2 endPos = Input.mousePosition;
-                float duration = Time.time - startTime;
+                float2 screenPos = new float2(Input.mousePosition.x, Input.mousePosition.y);
+                SwipeResult result = collector.End(screenPos, time);
 
-                if (duration <= maxSwipeTime)
+                if (result.valid && result.features.length >= minSwipeDistCm)
                 {
-                    ProcessSwipe(startPos, endPos, duration);
+                    ProcessShot(result.features, screenPos);
                 }
             }
         }
 
-        private void ProcessSwipe(Vector2 start, Vector2 end, float duration)
+        private void ProcessShot(in SwipeFeatures features, float2 endScreenPos)
         {
-            Vector2 delta = end - start;
-            float dist = delta.magnitude;
+            kickSeed = (kickSeed * 1664525u + 1013904223u);
 
-            if (dist < minSwipeDistPixels) return; // Vuốt quá ngắn, bỏ qua
-
-            // 1. Phép chiếu Raycast từ Camera qua điểm ngón tay đến mặt phẳng khung thành Z = 11.0m
+            // 1. Phép chiếu màn hình -> Điểm ngắm khung thành thế giới qua AimProjector
             var cam = Camera.main;
-            Vector3 targetOnGoal;
-
-            if (cam != null)
+            float3 rawAimPoint;
+            if (!AimProjector.TryScreenToGoalPlane(new Vector2(endScreenPos.x, endScreenPos.y), cam, 11.0f, out rawAimPoint))
             {
-                Ray ray = cam.ScreenPointToRay(end);
-                if (Mathf.Abs(ray.direction.z) > 0.001f)
-                {
-                    float t = (11.0f - ray.origin.z) / ray.direction.z;
-                    targetOnGoal = ray.origin + ray.direction * t;
-                }
-                else
-                {
-                    targetOnGoal = new Vector3(0f, 1.22f, 11.0f);
-                }
-            }
-            else
-            {
-                float refH = Screen.height > 0 ? Screen.height : 1080f;
-                float normX = (end.x - Screen.width * 0.5f) / (refH * 0.5f);
-                float normY = (end.y - Screen.height * 0.4f) / (refH * 0.4f);
-                targetOnGoal = new Vector3(normX * 3.66f, normY * 1.5f + 1.22f, 11.0f);
+                rawAimPoint = new float3(0f, 1.22f, 11.0f);
             }
 
-            // 2. Vận tốc vuốt (vuốt càng nhanh bóng bay càng căng)
-            float refH_speed = Screen.height > 0 ? Screen.height : 1080f;
-            float swipeSpeed = (dist / refH_speed) / Mathf.Max(0.04f, duration);
-            float tSpeed = Mathf.Clamp01((swipeSpeed - 0.8f) / 3.0f);
-            float forwardSpeed = Mathf.Lerp(minSpeed, maxSpeed, tSpeed);
+            // 2. Ánh xạ đặc trưng cử chỉ thành ShotIntent hoàn chỉnh
+            var cfg = Config;
+            ShotIntent intent = ShotMapper.Map(in features, rawAimPoint, cfg, timingError: 0f, seed: kickSeed);
 
-            // 3. Tính toán thời gian bay chính xác từ Z = 0 đến Z = 11.0m
-            float flightTime = 11.0f / forwardSpeed;
-
-            // 4. Bù trừ trọng lực chính xác tuyệt đối theo giải tích
-            // Y(T) = Y0 + Vy*T - 0.5*g*T^2  ==>  Vy = (Y_target - Y0 + 0.5*g*T^2) / T
-            float g = 9.81f;
-            float vy = (targetOnGoal.y - 0.11f + 0.5f * g * flightTime * flightTime) / flightTime;
-            float vx = targetOnGoal.x / flightTime;
-            float vz = forwardSpeed;
-
-            float3 launchVel = new float3(vx, vy, vz);
-
-            // 5. Tính toán độ xoáy (Spin) dựa trên độ lệch ngang
-            float curveX = (delta.x / refH_speed);
-            float spinZ = -curveX * 4.0f * (float)Math.PI; // Xoáy quả chuối nhẹ
-            float spinX = 1.0f * (float)Math.PI;
-            float3 spin = new float3(spinX, spinZ, 0f);
+            // 3. Tính toán vận tốc phóng ban đầu có bù trừ lực cản khí động học và trọng lực
+            float3 launchVelocity = SolveLaunchVelocity(in intent, BallParams.Default);
 
             isInputEnabled = false; // Khóa input khi bóng đang bay
-            OnShotFired?.Invoke(launchVel, spin);
+            OnShotFired?.Invoke(intent, launchVelocity);
+        }
+
+        /// <summary>
+        /// Bộ giải vận tốc phóng ban đầu chuẩn xác:
+        /// Kết hợp giải tích sơ bộ và 1 bước hiệu chỉnh vi phân qua TrajectoryPredictor
+        /// </summary>
+        public static float3 SolveLaunchVelocity(in ShotIntent intent, in BallParams p)
+        {
+            float3 origin = new float3(0f, p.radius, 0f);
+            float3 target = intent.aimPoint;
+
+            // Xử lý riêng cú Lốp bóng (Chip Shot)
+            if (intent.type == ShotType.Chip)
+            {
+                float chipSpeed = math.clamp(intent.speed * 0.72f, 14f, 18f);
+                float flightTime = 11.0f / math.max(8f, chipSpeed * 0.82f);
+                float g = p.gravity;
+                float vy = (target.y - origin.y + 0.5f * g * flightTime * flightTime + 0.65f) / flightTime;
+                float vx = target.x / flightTime;
+                float vz = 11.0f / flightTime;
+                return new float3(vx, vy, vz);
+            }
+
+            // 1. Dự tính vận tốc tới trước trung bình
+            float speed = math.clamp(intent.speed, 18f, 36f);
+            float vzEst = speed * 0.94f;
+            float tEst = 11.0f / vzEst;
+
+            // 2. Bù trừ trọng lực có tính đến độ trễ rơi do lực cản
+            float gComp = p.gravity * (1.0f + 0.08f * (tEst / 0.4f));
+            float vyEst = (target.y - origin.y + 0.5f * gComp * tEst * tEst) / tEst;
+
+            // 3. Bù trừ độ lệch ngang từ lực xoáy Magnus: F_m = 0.5 * rho * Cl * A * r * (spinY * vz)
+            float area = math.PI * p.radius * p.radius;
+            float magnusAccX = (0.5f * p.airDensity * p.liftCoefficient * area * p.radius / p.mass) * (intent.spin.y * vzEst);
+            float magnusOffsetX = 0.5f * magnusAccX * tEst * tEst;
+            float vxEst = (target.x - magnusOffsetX) / tEst;
+
+            // Chuẩn hoá độ lớn vận tốc theo intent.speed
+            float currentMagSq = vxEst * vxEst + vyEst * vyEst + vzEst * vzEst;
+            float scale = currentMagSq > 0.01f ? speed / math.sqrt(currentMagSq) : 1f;
+            float3 initVel = new float3(vxEst * scale, vyEst * scale, vzEst * scale);
+
+            // 4. Bước hiệu chỉnh vi phân 1 lượt (Refinement Step qua TrajectoryPredictor)
+            var testState = new BallState(origin, initVel, intent.spin);
+            if (TrajectoryPredictor.FirstCrossing(in testState, in p, 11.0f, 1f / 120f, out float3 hitPoint, out float actualTime))
+            {
+                if (actualTime > 0.05f)
+                {
+                    float errX = target.x - hitPoint.x;
+                    float errY = target.y - hitPoint.y;
+                    initVel.x += errX / actualTime;
+                    initVel.y += errY / actualTime;
+                }
+            }
+
+            return initVel;
         }
     }
 }
