@@ -17,7 +17,10 @@ nếu không bạn sẽ không bao giờ tái hiện được một tình huốn
 > - T18 & T20: 24 test trong [KeeperReadTests.cs](../../Assets/_Project/Tests/EditMode/KeeperReadTests.cs)
 > - T19: 9 test trong [KeeperControllerTests.cs](../../Assets/_Project/Tests/EditMode/KeeperControllerTests.cs)
 >
-> Chỉ còn task cuối cùng của Phase 3 là **T21 — Phân giải pha cản phá** (`SaveResolver`).
+> **CẬP NHẬT 2026-08-27: T21 — XONG.** Phase 3 đã đủ 6/6 task.
+> `SaveResolverTests` **26/26 xanh**; toàn bộ EditMode **423 test, 422 xanh, 0 đỏ, 1 bỏ qua** (87.3 s;
+> test bỏ qua là `[Ignore]` cố ý của T25). Kiểm thử đột biến: **12/12 đột biến bị giết**.
+> Đọc phần *Hai chỗ đi lệch khỏi đặc tả* ở T21 trước khi động vào code đó.
 
 ---
 
@@ -196,12 +199,75 @@ namespace Eleven.Keeper {
 }
 ```
 
-**Checklist nghiệm thu**
-- [ ] Bóng nhanh khó bắt dính hơn — `Caught` giảm khi tốc độ tăng
-- [ ] `deflectVelocity` bảo toàn năng lượng hợp lý, không bắn bóng nhanh hơn lúc tới
-- [ ] Khoảng cách tay-bóng lớn hơn tầm với → luôn `Missed`, không có ngoại lệ ngẫu nhiên
-- [ ] Cùng seed cho cùng kết quả
-- [ ] Phân bố trên 1000 lượt khớp `parryChance` của profile, sai số dưới 3%
+**Checklist nghiệm thu** — **26 test trong [SaveResolverTests.cs](../../Assets/_Project/Tests/EditMode/SaveResolverTests.cs), TẤT CẢ XANH 2026-08-27**
+- [x] Bóng nhanh khó bắt dính hơn — `Caught` giảm khi tốc độ tăng — **XANH 2026-08-27**: `BongCangNhanh_CangItBatDinh` đo tỉ lệ bắt dính đơn điệu giảm theo tốc độ (profile Thường, 2000 lượt mỗi mốc): `15 m/s = 74.6 %` · `20 = 64.5 %` · `25 = 54.1 %` · `30 = 44.8 %` · `35 = 34.1 %`
+- [x] `deflectVelocity` bảo toàn năng lượng hợp lý, không bắn bóng nhanh hơn lúc tới — **XANH 2026-08-27**: `DeflectVelocity_KhongBaoGioNhanhHonLucToi` (chuẩn hoá hướng rồi mới nhân `restitution * speed`, nên `|v'| = restitution·|v| ≤ |v|` đúng bằng định nghĩa, không phụ thuộc sai số trôi), `DeflectVelocity_DayBongRaXaBanTay`, `HuongBatRa_PhuThuocChatLuongTiepXuc`
+- [x] Khoảng cách tay-bóng lớn hơn tầm với → luôn `Missed`, không có ngoại lệ ngẫu nhiên — **XANH 2026-08-27**: `TayXaHonTamVoi_LuonMissed_KhongCoNgoaiLeNgauNhien` quét nhiều seed (điều cần loại trừ là "thỉnh thoảng may mắn cản được", nên một seed là không đủ); kèm `TayVuaDuTamVoi_KhongBaoGioMissed` chốt biên bên kia và `HandDistanceLaNaN_CoiLaHutTam_KhongNemLoi`
+- [x] Cùng seed cho cùng kết quả — **XANH 2026-08-27**: `CungSeed_ChoCungKetQua_VaCungVectorBatRa` (khớp cả `SaveResult` lẫn từng thành phần của `deflectVelocity`), `DoiSeed_ThiKetQuaPhaiThayDoi_KhongPhaiHangSo` (chốt chiều ngược lại — hằng số cũng "tất định"), `SeedBangKhong_KhongNemLoi`
+- [x] Phân bố trên 1000 lượt khớp `parryChance` của profile, sai số dưới 3% — **XANH 2026-08-27**: `PhanBo1000Luot_KhopParryChance_SaiSoDuoi3PhanTram` và `PhanBoMauLon_KhopParryChance_SaiSoDuoi1PhanTram`. Đo ở `NominalSpeed` (xem *Diễn giải 2* dưới đây): `0.70 → 69.70 %` (1000 lượt) / `70.38 %` (20000) · `0.45 → 44.20 % / 45.49 %` · `0.28 → 27.70 % / 28.35 %`
+
+**Bằng chứng sống**
+
+```
+-runTests -batchmode -nographics -testPlatform EditMode
+SaveResolverTests:  total=26  passed=26  failed=0  skipped=0
+TOÀN BỘ EditMode:   total=423 passed=422 failed=0  skipped=1  (87.3 s)
+```
+
+Một test bỏ qua là `[Ignore]` cố ý của T25 (`MoPhong1000Luot_TiLeCanPha_DungBangMucTieu`), chưa liên quan tới T21.
+
+**Kiểm thử đột biến — 12/12 đột biến bị giết.** Bộ test chỉ có giá trị nếu nó đỏ khi code sai,
+nên tôi sửa hỏng code có chủ đích 12 kiểu rồi chạy lại; mỗi kiểu đều bị ít nhất một test bắt:
+
+| Đột biến | Test bắt được |
+|---|---|
+| M1 bỏ chặn hụt tầm | `TayXaHonTamVoi_LuonMissed_KhongCoNgoaiLeNgauNhien` |
+| M2 bỏ chặn đầu ngón tay | `ChamDauNgonTay_KhongBaoGioBatDinh` |
+| M3 bỏ ảnh hưởng tốc độ | `BongCangNhanh_CangItBatDinh` |
+| M4 cho bật ra nhanh hơn lúc tới | `DeflectVelocity_KhongBaoGioNhanhHonLucToi` |
+| M5 đảo hướng bật ra | `DeflectVelocity_DayBongRaXaBanTay`, `OntoPost_KhiBongBiDayVaoCotDoc` |
+| M6 pháp tuyến cố định 45° | `HuongBatRa_PhuThuocChatLuongTiepXuc` |
+| M7 bỏ qua seed | 4 test, gồm cả hai test phân bố |
+| M8 bỏ kiểm bật cột | `OntoPost_KhiBongBiDayVaoCotDoc` |
+| M9 bỏ `saturate` tiến độ với tới | `HandPositionAt_KhiKipDayDu_NamDungTamO` |
+| M10 đo khoảng cách 3D thay vì trong mặt phẳng | `HandDistanceToBall_DoTrongMatPhang_BoQuaZ` |
+| M11 hoán đổi bán kính bay người / đứng tại chỗ | `CatchRadius_BayNguoi_NhoHon_DungTaiCho` + 2 |
+| M12 phá chuyển tiếp `GoalGeometry → GoalFrame` | `GoalFrame_KhopGoalGeometry_MotNguonSuThat` |
+
+### Hai chỗ đi lệch khỏi đặc tả — đọc trước khi sửa T21
+
+**Lệch 1 — đặc tả T21 thiếu một mảnh, phải bổ sung `KeeperReach` và `GoalFrame`.**
+`Resolve` nhận `handDistanceToBall` như **đầu vào**, nhưng trong toàn bộ repo *không có gì sinh ra
+con số đó*: `DiveDecision` chỉ mang `targetCell`, `commitTime`, `isFullDive` — không có vị trí tay,
+không có quỹ đạo bay người. Làm đúng nguyên văn đặc tả sẽ cho ra một bộ phân loại không ai gọi được.
+Nên tôi thêm:
+
+- [`KeeperReach.cs`](../../Assets/_Project/Code/Keeper/KeeperReach.cs) — nội suy vị trí tay từ điểm
+  chuẩn bị (`y = 1.05 m`) tới tâm ô đích theo tiến độ với tới, rồi đo khoảng cách **trong mặt phẳng
+  khung thành** (bỏ qua Z). Bất biến đã chốt bằng test: `ReachProgress(...) >= 1` **khi và chỉ khi**
+  `ReachEnvelope.CanReach(...)` — T21 không định nghĩa lại "kịp hay không kịp", nó chỉ biến câu trả
+  lời nhị phân của T16 thành liên tục.
+- [`GoalFrame.cs`](../../Assets/_Project/Code/Keeper/GoalFrame.cs) — số liệu khung thành và lưới 3×3
+  chuyển từ `Eleven.Match.GoalGeometry` xuống `Eleven.Keeper`, vì `SaveResolver` nằm trong
+  `Eleven.Keeper` mà asmdef đó **không tham chiếu ngược** lên `Eleven.Match` được (tham chiếu vòng
+  sẽ không biên dịch). `GoalGeometry` giữ nguyên bề mặt công khai và chuyển tiếp xuống, nên toàn bộ
+  test T10 cũ vẫn chốt hành vi như cũ. Test `GoalFrame_KhopGoalGeometry_MotNguonSuThat` bắt mọi
+  phân kỳ về sau.
+
+**Lệch 2 — mục nghiệm thu 1 và 5 mâu thuẫn nhau nếu không có mốc tốc độ.**
+Mục 1 đòi tỉ lệ bắt dính phải *đổi theo tốc độ*; mục 5 đòi phân bố phải *khớp `parryChance`* — một
+hằng số. Cả hai chỉ cùng đúng khi có một mốc tốc độ neo lại. Tôi neo ở `NominalSpeed = 25 m/s`:
+ở đúng 25 m/s phân bố khớp `parryChance` (mục 5), bóng nhanh hơn thì `parryProb` tăng và tỉ lệ bắt
+dính giảm (mục 1). Đây là **diễn giải của tôi, chưa có người xác nhận** — nếu con số 25 m/s sai với
+ý đồ thiết kế thì sửa hằng số `SaveResolver.NominalSpeed`, hai test phân bố sẽ tự đo lại ở mốc mới.
+
+> **Cảnh báo cho task kế tiếp:** T21 **một mình không** kéo tỉ lệ cản phá đo được (2.1 / 8.4 / 10.8 %)
+> lên mục tiêu 18 / 28 / 38 % của T25. Ba nguyên nhân đã đo được nằm ở T18/T19 chứ không nằm ở luật
+> cản phá: (1) tín hiệu hàng `runUpLength` có σ = 1.5 m trong khi hàng cách nhau 1.0 m nên gần như
+> không mang thông tin; (2) `readAccuracy` chỉ vào một `sharpness` đã bão hoà, khiến Thường (0.52)
+> và Khó (0.72) chỉ chênh 0.5 điểm phần trăm độ chính xác ô; (3) ngưỡng tự tin của
+> `SimpleKeeperController` (0.45 / 0.20) nằm rất xa mức ~0.10–0.13 mà bộ não thực sự sinh ra, nên
+> nhánh "đứng giữa" nuốt 83–90 % số cú sút. Sửa mối nối đó là một task riêng.
 
 ---
 

@@ -1,5 +1,6 @@
 using Unity.Mathematics;
 using Eleven.Ball;
+using Eleven.Keeper;
 
 namespace Eleven.Match
 {
@@ -36,41 +37,25 @@ namespace Eleven.Match
     /// </summary>
     public static class GoalGeometry
     {
-        public const float Width = 7.32f;
-        public const float Height = 2.44f;
-        public const float PostRadius = 0.06f;
-        public const float PenaltyDistance = 11f;
+        // Số liệu và lưới ô nay do Eleven.Keeper.GoalFrame giữ, vì T21 (SaveResolver) nằm
+        // trong Eleven.Keeper mà asmdef đó KHÔNG tham chiếu ngược lên Eleven.Match được.
+        // Ở đây chỉ chuyển tiếp để mã gọi cũ và bộ test T10 không phải đổi một dòng nào.
+        public const float Width = GoalFrame.Width;
+        public const float Height = GoalFrame.Height;
+        public const float PostRadius = GoalFrame.PostRadius;
+        public const float PenaltyDistance = GoalFrame.PenaltyDistance;
 
         // Đường tâm của cột/xà nằm ngoài mép trong đúng PostRadius (xem ghi chú diễn giải #2).
-        const float PostCenterX = Width * 0.5f + PostRadius;
-        const float CrossbarCenterY = Height + PostRadius;
+        const float PostCenterX = GoalFrame.PostCenterX;
+        const float CrossbarCenterY = GoalFrame.CrossbarCenterY;
 
         const float SimDt = 1f / 240f; // mịn hơn SimDt của BallDriver (1/120) để phân loại biên chính xác
         const float SafetyMaxTime = 30f; // trần an toàn nếu bóng không bao giờ tới đất lẫn khung thành
 
         /// <summary>Ô lưới 3x3 chứa điểm rơi. 0 = trên-trái .. 8 = dưới-phải. Luôn trả giá trị hợp lệ (kẹp biên).</summary>
-        public static int CellOf(float3 crossingPoint)
-        {
-            float colF = (crossingPoint.x + Width * 0.5f) / (Width / 3f);
-            float rowF = (Height - crossingPoint.y) / (Height / 3f);
+        public static int CellOf(float3 crossingPoint) => GoalFrame.CellOf(crossingPoint);
 
-            int col = (int)math.clamp(math.floor(colF), 0f, 2f);
-            int row = (int)math.clamp(math.floor(rowF), 0f, 2f);
-
-            return row * 3 + col;
-        }
-
-        public static float3 CellCenter(int cell)
-        {
-            cell = math.clamp(cell, 0, 8);
-            int row = cell / 3;
-            int col = cell % 3;
-
-            float x = -Width * 0.5f + (col + 0.5f) * (Width / 3f);
-            float y = Height - (row + 0.5f) * (Height / 3f);
-
-            return new float3(x, y, PenaltyDistance);
-        }
+        public static float3 CellCenter(int cell) => GoalFrame.CellCenter(cell);
 
         public static ShotOutcome Classify(in BallState start, in BallParams p,
                                            out float3 crossing, out int cell)
@@ -165,12 +150,6 @@ namespace Eleven.Match
 
         /// <summary>Khoảng cách từ điểm tới đoạn thẳng trong mặt phẳng XY.</summary>
         static float DistancePointToSegment(float2 point, float2 a, float2 b)
-        {
-            float2 ab = b - a;
-            float lenSq = math.dot(ab, ab);
-            float t = lenSq > 0f ? math.saturate(math.dot(point - a, ab) / lenSq) : 0f;
-            float2 closest = a + t * ab;
-            return math.distance(point, closest);
-        }
+            => GoalFrame.DistancePointToSegment(point, a, b);
     }
 }
