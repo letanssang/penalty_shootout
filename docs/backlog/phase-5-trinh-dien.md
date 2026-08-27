@@ -130,14 +130,54 @@ nằm trong lượt EditMode **446 test, 445 xanh, 0 đỏ, 1 skip (85.3 s)**.
 > trên mobile — alpha clipping, overdraw và băng thông đều tệ. GPU Resident Drawer giảm chi phí
 > CPU chứ *không* giảm những thứ đó. Task này phải đo trước, tối ưu sau, và sẵn sàng bị cắt.
 
+**XONG (phần mã) 2026-08-27.** File: [GrassDensityField.cs](../../Assets/_Project/Code/Presentation/Grass/GrassDensityField.cs) ·
+[GrassInstance.cs](../../Assets/_Project/Code/Presentation/Grass/GrassInstance.cs) ·
+[GrassRenderSettings.cs](../../Assets/_Project/Code/Presentation/Grass/GrassRenderSettings.cs) ·
+[GrassTierSettings.cs](../../Assets/_Project/Code/Presentation/Grass/GrassTierSettings.cs) ·
+[GrassField.cs](../../Assets/_Project/Code/Presentation/Grass/GrassField.cs) ·
+[GrassMeasurement.cs](../../Assets/_Project/Code/Presentation/Grass/GrassMeasurement.cs) ·
+[Grass.shader](../../Assets/_Project/Art/Shaders/Grass.shader),
+test [GrassSystemTests.cs](../../Assets/_Project/Tests/EditMode/GrassSystemTests.cs) (17 test),
+nằm trong lượt EditMode **477 test, 476 xanh, 0 đỏ, 1 skip (127.9 s)**.
+Shader biên dịch sạch: `ShaderUtil.ShaderHasError` = false, 2 pass, 0 cảnh báo.
+
+> ⚠️ **BỐN ô dưới đây CHƯA đóng được và không được tick.** Chúng đòi một GPU thật.
+> EditMode không đo được overdraw, không đo được mili-giây GPU, và không có tên máy để ghi.
+> Xem [báo cáo đo hiệu năng Phase 5](../phase-5-do-hieu-nang.md) để biết đo bằng cách nào —
+> ở đó đã dựng sẵn khung bảng tám dòng, chỉ còn thiếu số.
+
 **Checklist nghiệm thu**
-- [ ] Mật độ giảm dần theo bán kính, đọc từ `TierProfile.grassDensity`
-- [ ] **Đo overdraw** bằng debug view của URP, dán ảnh chụp vào báo cáo
-- [ ] Ngân sách **≤ 2.0ms GPU** ở bậc A — dán số đo thật từ máy, ghi rõ tên máy
+- [x] Mật độ giảm dần theo bán kính, đọc từ `TierProfile.grassDensity` — **XANH 2026-08-27**:
+      `MatDo_GiamDanTheoBanKinh_KhongBaoGioTang`, `MatDo_DocTuTierProfile_KhongVietCungTrongMa`
+      (đổi `grassDensity` thành 0.7 thì số túm giảm theo — chứng minh không viết cứng),
+      `RaiCo_MatDoThucTe_GiamDanRaNgoai` (đo trên dữ liệu đã rải: 8.0 túm/m² trong bán kính 12 m,
+      ~4.5 túm/m² ở vành 20–24 m).
+- [ ] **Đo overdraw** bằng debug view của URP, dán ảnh chụp vào báo cáo — **CẦN NGƯỜI KIỂM**.
+      Trần đã chốt trong mã: `GrassBudget.MaxAverageOverdraw` = 2.5.
+- [ ] Ngân sách **≤ 2.0ms GPU** ở bậc A — dán số đo thật từ máy, ghi rõ tên máy — **CẦN NGƯỜI KIỂM**.
+      Trần đã chốt: `GrassBudget.MaxTierAGpuMs` = 2.0 (`NganSachBacA_Dung2ms`).
+      Phần CPU đã xanh: `VongLapMoiKhungHinh_KhongCapPhatGC` (500 khung hình, 0 byte GC).
 - [ ] Đo cả ba biến thể: có/không alpha clip, có/không đổ bóng, có/không gió. Bảng so sánh 8 dòng.
-- [ ] Bậc C tắt hoàn toàn, thay bằng texture, chênh lệch frame time được ghi lại
-- [ ] Có cờ tắt riêng để đo đóng góp của riêng cỏ vào frame time
-- [ ] Nếu không đạt 2.0ms: **báo cáo lại thay vì tự ý giảm chất lượng** — quyết định cắt là của bạn
+      — **KHUNG BẢNG XANH, SỐ ĐO CẦN NGƯỜI KIỂM**: `TamBienThe_DuTamToHop_KhongTrungNhau`
+      (đúng 8 tổ hợp, mỗi công tắc bật ở đúng 4 dòng), `BangDo_ThieuDongThiKhongKetLuan_DuMoiDongDaDoDeuDat`
+      và `DongDo_ThieuTenMay_KhongTinhLaDaDo` (bảy dòng, hoặc số đo không có tên máy, đều KHÔNG
+      kết luận được — để ô này không tick khống được).
+- [ ] Bậc C tắt hoàn toàn, thay bằng texture, chênh lệch frame time được ghi lại —
+      **PHẦN MÃ XANH, CHÊNH LỆCH FRAME TIME CẦN NGƯỜI KIỂM**:
+      `BacC_TatHoanToan_ThayBangTextureMatSan` (0 túm, 0 draw call, `usesGroundTexture` = true),
+      `SoSanhBacC_PhaiCoCaHaiSoDo_VaTenMay`.
+- [x] Có cờ tắt riêng để đo đóng góp của riêng cỏ vào frame time — **XANH 2026-08-27**:
+      `CoTatRieng_TatDuocMaKhongRaiLaiCo` — `GrassField.IsEnabled` tắt được mà KHÔNG rải lại cỏ,
+      nên chênh lệch frame time đo được là chi phí dựng hình thuần, không lẫn chi phí sinh dữ liệu.
+- [x] Nếu không đạt 2.0ms: **báo cáo lại thay vì tự ý giảm chất lượng** — quyết định cắt là của bạn
+      — **XANH 2026-08-27**: `VuotNganSach_PhaiBaoCao_KhongTuHaChatLuong`. Bảng 3.4ms trả về
+      `GrassVerdict.VuotNganSach_PhaiBaoCao`, và test kiểm rằng sau khi đọc bảng thì `densityScale`,
+      `maxInstances` và số túm đang rải KHÔNG đổi. `GrassMeasurementTable` không có đường nào
+      chạm vào `GrassTierSettings` hay `GrassField`.
+
+**Số liệu đã chốt trong mã** (để người đo biết mình đang đo cái gì):
+mật độ tối đa 8 túm/m² trong bán kính 12 m, tắt hẳn ở 34 m · ~13.9k túm ở bậc A, ~5.5k ở bậc B ·
+trần 24.000 túm · 32 byte/instance → bộ đệm 768 KB · 1 draw call · cao 6–11 cm.
 
 ---
 
@@ -145,13 +185,46 @@ nằm trong lượt EditMode **446 test, 445 xanh, 0 đỏ, 1 skip (85.3 s)**.
 
 **Phụ thuộc:** T03 · **Ước lượng:** ~2 ngày
 
+**XONG (phần mã) 2026-08-27.** File: [CrowdInstance.cs](../../Assets/_Project/Code/Presentation/Crowd/CrowdInstance.cs) ·
+[CrowdAtlas.cs](../../Assets/_Project/Code/Presentation/Crowd/CrowdAtlas.cs) ·
+[CrowdBillboard.cs](../../Assets/_Project/Code/Presentation/Crowd/CrowdBillboard.cs) ·
+[CrowdStandLayout.cs](../../Assets/_Project/Code/Presentation/Crowd/CrowdStandLayout.cs) ·
+[CrowdTierSettings.cs](../../Assets/_Project/Code/Presentation/Crowd/CrowdTierSettings.cs) ·
+[CrowdDirector.cs](../../Assets/_Project/Code/Presentation/Crowd/CrowdDirector.cs) ·
+[CrowdImpostor.shader](../../Assets/_Project/Art/Shaders/CrowdImpostor.shader),
+test [CrowdImpostorTests.cs](../../Assets/_Project/Tests/EditMode/CrowdImpostorTests.cs) (14 test),
+nằm trong lượt EditMode **477 test, 476 xanh, 0 đỏ, 1 skip (127.9 s)**.
+Shader biên dịch sạch: `ShaderUtil.ShaderHasError` = false, 1 pass, 0 cảnh báo.
+
 **Checklist nghiệm thu**
-- [ ] Một atlas duy nhất, một draw call cho toàn bộ khán giả
-- [ ] Ngân sách **≤ 0.8ms** — dán số đo thật
-- [ ] Phản ứng theo sự kiện: nhảy khi vào bóng, gục khi hỏng, im khi đặt bóng
-- [ ] Pha animation lệch nhau theo instance, không đồng loạt như robot
-- [ ] Luôn hướng camera nhưng không lật khi camera đi qua ngang
-- [ ] Bậc C dùng khán giả tĩnh, vẫn còn hình, không biến mất
+- [x] Một atlas duy nhất, một draw call cho toàn bộ khán giả — **XANH 2026-08-27**:
+      `MotDrawCall_MotAtlas_ChoToanBoKhanGia` (mọi bậc: `drawCallCount` = 1, `atlasId` = 0,
+      `instanceCount` = tổng số ghế > 500), `AtlasCoDungMotBoOKhongDeChongLen_VaNamTronTrongUV`
+      (32 ô, không ô nào chồng nhau, tất cả nằm trong [0,1]),
+      `ShaderKhanGia_ChiKhaiBaoMotTexture_MotBuffer_VaKhongDoBong` (đọc thẳng file .shader:
+      đúng một `TEXTURE2D`, đúng một `StructuredBuffer`, không có pass `ShadowCaster`).
+- [ ] Ngân sách **≤ 0.8ms** — dán số đo thật — **CẦN NGƯỜI KIỂM**.
+      Trần đã chốt: `CrowdBudget.MaxGpuBudgetMs` = 0.8. Phần CPU đã xanh:
+      `NganSachGPU_BacA_Duoi0_8ms_VaCpuKhongCapPhat` (500 khung hình, 0 byte GC — mỗi khung hình
+      CPU chỉ cộng một số thực, mảng instance không bị đụng tới sau lúc khởi tạo).
+- [x] Phản ứng theo sự kiện: nhảy khi vào bóng, gục khi hỏng, im khi đặt bóng — **XANH 2026-08-27**:
+      `PhanUngTheoSuKien_NhayKhiVaoBong_GucKhiHong_ImKhiDatBong` và
+      `BangAnhXaCamXuc_DayDu_ChoMoiPhaVaMoiKetQua` (phủ toàn bộ ma trận `KickPhase` × `ShotOutcome`;
+      chưa chốt kết quả thì khán đài vẫn nín thở — không ăn mừng sớm nửa giây).
+- [x] Pha animation lệch nhau theo instance, không đồng loạt như robot — **XANH 2026-08-27**:
+      `PhaAnimation_LechNhauTheoInstance_KhongDongLoatNhuRobot` — histogram 8 khung hình tại
+      t ∈ {0, 0.13, 0.41, 0.77, 1.5}s, mỗi khung hình luôn có hơn 1/32 số ghế; tỉ lệ hai ghế
+      cạnh nhau trùng khung hình < 35%.
+- [x] Luôn hướng camera nhưng không lật khi camera đi qua ngang — **XANH 2026-08-27**:
+      `Billboard_LuonHuongCamera_VaKhongLatKhiCameraDiQuaNgang` — quay camera 720 bước quanh khán
+      đài, có dao động độ cao qua đỉnh đầu: `dot(normal, hướng-tới-camera)` > 0.999 suốt vòng,
+      `cross(right, up)` không đổi dấu lần nào, góc lệch giữa hai bước liên tiếp < 3°.
+      Cộng `Billboard_CameraThangDinhDau_GiuNguyenGocCu_KhongGiat` (điểm suy biến duy nhất giữ
+      góc cũ thay vì để `atan2(0,0)` làm cả khán đài giật một cái).
+- [x] Bậc C dùng khán giả tĩnh, vẫn còn hình, không biến mất — **XANH 2026-08-27**:
+      `BacC_KhanGiaTinh_VanConHinh_KhongBienMat` — `visible` = true, `animated` = false,
+      số ghế bằng đúng bậc A, mọi khung hình = 0, vẫn 1 draw call; `ApplyTier(A)` bật lại
+      animation mà không sinh lại ghế.
 
 ---
 
@@ -162,13 +235,81 @@ nằm trong lượt EditMode **446 test, 445 xanh, 0 đỏ, 1 skip (85.3 s)**.
 Pre-integrated SSS bằng LUT độ cong — một lần fetch texture, không phải blur nhiều pass.
 Đây là kỹ thuật khả thi trên mobile.
 
+**XONG (phần mã) 2026-08-27.** File: [SkinDiffusionProfile.cs](../../Assets/_Project/Code/Presentation/Skin/SkinDiffusionProfile.cs) ·
+[SkinSssLut.cs](../../Assets/_Project/Code/Presentation/Skin/SkinSssLut.cs) ·
+[SkinSssSettings.cs](../../Assets/_Project/Code/Presentation/Skin/SkinSssSettings.cs) ·
+[SkinShaderVariants.cs](../../Assets/_Project/Code/Presentation/Skin/SkinShaderVariants.cs) ·
+[SkinSssMeasurement.cs](../../Assets/_Project/Code/Presentation/Skin/SkinSssMeasurement.cs) ·
+[Skin.shader](../../Assets/_Project/Art/Shaders/Skin.shader),
+test [SkinSssTests.cs](../../Assets/_Project/Tests/EditMode/SkinSssTests.cs) (32 test),
+nằm trong lượt EditMode **509 test, 508 xanh, 0 đỏ, 1 skip (92.5 s)**.
+Shader biên dịch sạch: `ShaderUtil.ShaderHasError` = false, 3 pass, 0 cảnh báo.
+
+> ⚠️ **BỐN ô dưới đây CHƯA đóng được và không được tick.** Chúng đòi một GPU thật và một
+> build thật: EditMode không đo được mili-giây GPU, không chụp được ảnh so sánh, không thấy
+> được bộ lọc biến thể lúc build, và không có tên máy để ghi.
+> Xem [báo cáo đo hiệu năng Phase 5](../phase-5-do-hieu-nang.md) để biết đo bằng cách nào.
+
 **Checklist nghiệm thu**
-- [ ] Shader Graph hoặc HLSL, tương thích URP Forward+
-- [ ] Ngân sách **≤ 0.5ms** cho 2 nhân vật — số đo thật từ máy bậc B
-- [ ] So sánh cạnh nhau: bật/tắt SSS, chụp cùng góc cùng ánh sáng
+- [x] Shader Graph hoặc HLSL, tương thích URP Forward+ — **XANH 2026-08-27**: viết tay HLSL
+      ([Skin.shader](../../Assets/_Project/Art/Shaders/Skin.shader)), không dùng Shader Graph.
+      `ShaderDa_DungVongLapDenPhanCum_ChuKhongTuVietVongLap` đọc thẳng file và bắt buộc phần đèn
+      phụ đi qua `LIGHT_LOOP_BEGIN`/`LIGHT_LOOP_END` của URP thay vì tự viết
+      `for (i < GetAdditionalLightsCount())` — ở URP 17 Forward+, `GetAdditionalLightsCount()`
+      trả về **0** theo thiết kế, nên một vòng lặp tự viết sẽ im lặng đánh rơi TOÀN BỘ đèn phụ
+      mà shader vẫn biên dịch sạch. Cộng `ShaderDa_CoDuPassDungHinh_BongDo_VaChieuSau`
+      (`UniversalForward` + `ShadowCaster` + `DepthOnly`) và `ShaderDa_TenKhopVoiHangSoTrongMa`
+      (tên shader trong file khớp `SkinShaderKeywords.ShaderName`).
+- [ ] Ngân sách **≤ 0.5ms** cho 2 nhân vật — số đo thật từ máy bậc B — **CẦN NGƯỜI KIỂM**.
+      Trần đã chốt: `SkinBudget.MaxGpuBudgetMs` = 0.5 cho `SkinBudget.CharacterCount` = 2
+      (`NganSach_Dung05ms_ChoDungHaiNhanVat`). Số đo một nhân vật bị quy về hai trước khi kết
+      luận (`SoDoMotNhanVat_PhaiQuyVeHaiNhanVat_TruocKhiKetLuan`), số đo không có tên máy KHÔNG
+      tính là đã đo (`SoDo_ThieuTenMay_KhongTinhLaDaDo`), và vượt trần thì
+      `SkinBudgetCheck.Evaluate` trả `VuotNganSach_PhaiBaoCao` chứ không tự tắt SSS
+      (`VuotNganSach_PhaiBaoCao_KhongTuTatSss` kiểm rằng cấu hình không đổi sau khi đọc kết luận).
+      Phần CPU đã xanh: `DoiBac_KhongCapPhatGC` (1000 lượt đổi bậc, 0 byte GC).
+- [ ] So sánh cạnh nhau: bật/tắt SSS, chụp cùng góc cùng ánh sáng — **CẦN NGƯỜI KIỂM**.
+      Khung đã xanh: `SoSanhCanhNhau_DuThongTinThiMoiTinhLaDaChup` và
+      `SoSanhCanhNhau_ThieuGocHoacAnhSang_ThiKhongChungMinhDuocGi` — hai ảnh chụp ở hai góc
+      camera khác nhau, hoặc hai cấu hình đèn khác nhau, hoặc trỏ vào cùng một file, đều KHÔNG
+      tính là đã chụp. Đây là ô dễ tick khống nhất, nên kiểu dữ liệu chặn sẵn.
 - [ ] Không có shader variant nào bị strip nhầm — kiểm bằng build thật, không phải Editor
-- [ ] Tắt được ở bậc C qua `TierProfile.subsurfaceScattering`, về Lit thường
-- [ ] Thời gian biên dịch shader không làm màn hình đầu tiên delay quá 1 giây
+      — **PHẦN ĐỌC ĐƯỢC TRONG EDITOR ĐÃ XANH, BUILD THẬT CẦN NGƯỜI KIỂM**.
+      `BaKeyword_PhaiKhaiBangMultiCompile_KhongPhaiShaderFeature`: `_SKIN_SSS_ON`,
+      `_SKIN_TRANSMISSION_ON`, `_CLUSTER_LIGHT_LOOP` đều khai bằng `multi_compile` — `shader_feature`
+      bị lược lúc build khi không vật liệu nào trong build bật keyword đó, mà ở đây keyword do
+      bậc thiết bị bật lúc chạy nên không vật liệu nào bật sẵn.
+      `SoBienTheDungHinh_KhongVuotTran` đếm thẳng từ file: 7 dòng `multi_compile` →
+      2×3×2×2×2×2×2 = **192** biến thể pass dựng hình, dưới trần `SkinBudget.MaxForwardVariants` = 256.
+      `ShaderDa_KhongKeoTheoNhungMultiCompileKhongDung` cấm khai `LIGHTMAP_ON`,
+      `_SCREEN_SPACE_OCCLUSION`, `_ADDITIONAL_LIGHT_SHADOWS`, `_REFLECTION_PROBE_*`,
+      `_LIGHT_COOKIES`, `LOD_FADE_CROSSFADE` — mỗi dòng thừa nhân đôi số biến thể.
+      `MoiBienThe_BatBuoc_ChayForwardPlus_VaKhacNhau` (3 biến thể bắt buộc, đều Forward+, đôi một
+      khác nhau), `KiemBienThe_ThieuMotBienThe_ThiKhongDat`,
+      `KiemBienThe_ThieuBuildHoacMay_KhongTinhLaDaKiem`.
+- [x] Tắt được ở bậc C qua `TierProfile.subsurfaceScattering`, về Lit thường — **XANH 2026-08-27**:
+      `BacC_TatSss_VeLitThuong` (bậc C: `enabled` = false, `useLitFallback` = true,
+      `sssStrength` = 0, `transmission` = false) và `CoTrongProfile_ThangBangMacDinhCuaBac`
+      (tắt cờ trong profile ở bậc A thì SSS cũng tắt thật — cờ thắng bảng mặc định).
+      `NhanhTatSss_TrongShader_LaLambert_TucLitThuong` đọc file shader và kiểm rằng nhánh
+      `#else` của `_SKIN_SSS_ON` đúng là `saturate(NdotL)` — tức Lambert + GGX, chính là Lit
+      thường, giữ nguyên vật liệu và draw call thay vì đổi sang `Universal Render Pipeline/Lit`.
+- [ ] Thời gian biên dịch shader không làm màn hình đầu tiên delay quá 1 giây — **CẦN NGƯỜI KIỂM**.
+      Trần đã chốt: `SkinBudget.MaxFirstScreenCompileMs` = 1000.
+      `SoDoBienDich_PhaiLaLanChayDauTien_CacheConTrong` — số đo trong Editor hoặc ở lần chạy thứ
+      hai KHÔNG tính, vì lúc đó shader đã nằm sẵn trong cache. Cơ chế thật sự giữ ô này là trần
+      192 biến thể ở trên: URP/Lit khai hơn ba mươi `multi_compile` và ra hàng chục nghìn biến thể.
+
+**Số liệu đã chốt trong mã** (để người đo biết mình đang đo cái gì): LUT 128×32 RGB24 = **12 KB**
+(`KichThuocTexture_Dung12KB`, `MaHoaRgb24_TronVenHaiDauDai`) · sáu Gauss của d'Eon & Luebke,
+phương sai 0.0064–7.41 mm² · bán kính độ cong 6–200 mm, hàng LUT chia đều theo **độ cong** chứ
+không theo bán kính (`HangCuaLut_ChiaDeuTheoDoCong_KhongPhaiTheoBanKinh`) · một lần
+`SAMPLE_TEXTURE2D` mỗi điểm ảnh da, không pass phụ, không render target phụ.
+Hành vi LUT đã kiểm: `Lut_SangDanTheoGocChieu_KhongBaoGioToiDi`,
+`Lut_DoCongCangGat_AnhSangVongCangXa`, `Lut_DoLanQuaVungGiaoRanh_XaHonXanhVaLam` (đỏ lan xa nhất
+— đó chính là vệt ửng đỏ ở rìa bóng trên mặt người), `Lut_BeMatPhang_TraVeGanDungLambert`
+(mặt phẳng lệch Lambert tối đa 0.0048), `Lut_MoiGiaTriNamTrong01`,
+`Lut_TatDinh_ChayLaiRaTungBitGiongNhau` (bake tất định).
 
 ---
 
