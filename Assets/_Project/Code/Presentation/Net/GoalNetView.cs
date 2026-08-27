@@ -23,7 +23,7 @@ namespace Eleven.Presentation.Net
             if (isInitialized) return;
 
             // Khởi tạo NetSimulator (287 hạt Verlet)
-            simulator = new NetSimulator(enableSimulation: true);
+            simulator = new NetSimulator(17, 9, 5);
 
             var particles = simulator.Particles;
             int count = particles.Length;
@@ -34,21 +34,19 @@ namespace Eleven.Presentation.Net
                 meshVertices[i] = (Vector3)(float3)particles[i].position;
             }
 
-            // Sinh topology hình học cho lưới (Wireframe/Quads/Triangles)
+            // Sinh topology hình học cho lưới
             var constraints = simulator.Constraints;
             int numConstraints = constraints.Length;
-            var trianglesList = new List<int>(numConstraints * 2);
+            var indicesList = new List<int>(numConstraints * 2);
 
             for (int i = 0; i < numConstraints; i++)
             {
                 var c = constraints[i];
-                // Vẽ đường liên kết lưới dưới dạng đường dây hoặc tam giác mảnh
-                trianglesList.Add(c.indexA);
-                trianglesList.Add(c.indexB);
-                trianglesList.Add(c.indexA);
+                indicesList.Add(c.x);
+                indicesList.Add(c.y);
             }
 
-            meshTriangles = trianglesList.ToArray();
+            meshTriangles = indicesList.ToArray();
 
             netMesh = new Mesh
             {
@@ -60,6 +58,15 @@ namespace Eleven.Presentation.Net
 
             var mf = GetComponent<MeshFilter>();
             mf.sharedMesh = netMesh;
+
+            var mr = GetComponent<MeshRenderer>();
+            var netShader = Shader.Find("Universal Render Pipeline/Unlit") 
+                         ?? Shader.Find("Sprites/Default") 
+                         ?? Shader.Find("Universal Render Pipeline/Lit");
+            var netMat = new Material(netShader);
+            netMat.color = new Color(0.90f, 0.95f, 1.0f, 0.85f);
+            if (netMat.HasProperty("_BaseColor")) netMat.SetColor("_BaseColor", netMat.color);
+            mr.material = netMat;
 
             isInitialized = true;
         }
@@ -96,8 +103,8 @@ namespace Eleven.Presentation.Net
         {
             if (!isInitialized || simulator == null) return;
 
-            // Chạy bước tính toán Verlet với CCD chống xuyên bóng
-            simulator.StepWithBall(dt, ballPos, ballVel, ballRadius);
+            // Chạy bước tính toán Verlet
+            simulator.StepSynchronous(ballPos, ballVel, ballRadius, dt);
 
             // Cập nhật đỉnh Mesh
             var particles = simulator.Particles;

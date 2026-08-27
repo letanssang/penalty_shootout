@@ -27,7 +27,7 @@ namespace Eleven.Tests.EditMode
                 var kick = suite[i];
                 Assert.IsTrue(seedSet.Add(kick.seed),
                     $"Kịch bản thứ {i} bị trùng seed {kick.seed} với kịch bản trước.");
-                Assert.Greater(kick.flightDuration, 0.1f, "Thời gian bay của bóng không hợp lệ.");
+                Assert.Greater(kick.intent.speed, 10.0f, "Vận tốc sút của bóng không hợp lệ.");
             }
         }
 

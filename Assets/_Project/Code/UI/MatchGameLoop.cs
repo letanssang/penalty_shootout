@@ -8,7 +8,6 @@ using Eleven.Shooter;
 using Eleven.Match;
 using Eleven.Presentation;
 using Eleven.Presentation.Net;
-using Eleven.Presentation.Camera;
 
 namespace Eleven.UI
 {
@@ -28,9 +27,7 @@ namespace Eleven.UI
         [SerializeField] private UnityEngine.Camera mainCamera;
 
         private BallDriver ballDriver;
-        private BallParams ballParams;
         private BallState ballState;
-        private bool isBallInFlight = false;
         private bool isReplayActive = false;
         private ReplayPlayer currentReplayPlayer;
         private ReplayKickData lastKickData;
@@ -48,6 +45,11 @@ namespace Eleven.UI
 
         private void Start()
         {
+            if (ballTransform != null)
+            {
+                ballDriver = ballTransform.GetComponent<BallDriver>() ?? ballTransform.gameObject.AddComponent<BallDriver>();
+            }
+
             ResetBall();
 
             if (swipeReceiver != null)
@@ -80,10 +82,13 @@ namespace Eleven.UI
 
         private void ResetBall()
         {
-            isBallInFlight = false;
             isReplayActive = false;
 
-            if (ballTransform != null)
+            if (ballDriver != null)
+            {
+                ballDriver.ResetTo(new float3(0f, 0.11f, 0f));
+            }
+            else if (ballTransform != null)
             {
                 ballTransform.position = new Vector3(0f, 0.11f, 0f);
                 ballTransform.rotation = Quaternion.identity;
@@ -116,23 +121,13 @@ namespace Eleven.UI
         private void HandleShotFired(float3 launchVelocity, float3 spin)
         {
             currentSeed += 7u;
-            isBallInFlight = true;
 
-            ballParams = new BallParams
+            ballState = new BallState(new float3(0f, 0.11f, 0f), launchVelocity, spin);
+
+            if (ballDriver != null)
             {
-                radius = 0.11f,
-                mass = 0.43f,
-                dragCrisis = true
-            };
-
-            ballState = new BallState
-            {
-                position = new float3(0f, 0.11f, 0f),
-                velocity = launchVelocity,
-                spin = spin
-            };
-
-            ballDriver = new BallDriver(ballState, ballParams);
+                ballDriver.Launch(ballState);
+            }
 
             if (ballTrail != null)
             {
@@ -147,17 +142,26 @@ namespace Eleven.UI
             }
 
             // Lưu dữ liệu cho Replay
-            lastKickData = new ReplayKickData(
-                seed: currentSeed,
-                shooterId: 0,
-                keeperId: 1,
-                strikeType: 0,
-                launchPosition: ballState.position,
-                launchVelocity: launchVelocity,
-                spin: spin,
-                flightDuration: 0.55f,
-                result: 1
-            );
+            float speed = math.length(launchVelocity);
+            float3 aim = new float3(launchVelocity.x * (11.0f / math.max(1f, launchVelocity.z)), launchVelocity.y * (11.0f / math.max(1f, launchVelocity.z)), 11.0f);
+
+            lastKickData = new ReplayKickData
+            {
+                seed = currentSeed,
+                intent = new ShotIntent
+                {
+                    aimPoint = aim,
+                    spin = spin,
+                    speed = speed,
+                    type = ShotType.Instep,
+                    quality = 0.95f,
+                    unstable = false,
+                    scatterRadius = 0.05f
+                },
+                expectedOutcome = ShotOutcome.Goal,
+                expectedCrossing = aim,
+                expectedCell = 4
+            };
 
             if (scoreboard != null)
             {
@@ -174,25 +178,18 @@ namespace Eleven.UI
                 currentReplayPlayer.Tick(dt);
                 if (ballTransform != null)
                 {
-                    ballTransform.position = (Vector3)(float3)currentReplayPlayer.CurrentPosition;
+                    ballTransform.position = (Vector3)(float3)currentReplayPlayer.CurrentBallState.position;
                 }
-                if (!currentReplayPlayer.IsPlaying)
+                if (!currentReplayPlayer.IsPlaying || currentReplayPlayer.HasCompleted)
                 {
                     isReplayActive = false;
                 }
                 return;
             }
 
-            if (!isBallInFlight || ballDriver == null) return;
+            if (ballDriver == null || !ballDriver.IsLive) return;
 
-            // Bước tích phân vật lý bóng bay RK4 120Hz
-            ballDriver.Step(dt);
             ballState = ballDriver.State;
-
-            if (ballTransform != null)
-            {
-                ballTransform.position = (Vector3)(float3)ballState.position;
-            }
 
             // Cập nhật tương tác Lưới Verlet
             if (goalNet != null)
@@ -203,14 +200,13 @@ namespace Eleven.UI
             // Kiểm tra khi bóng bay đến vạch vôi khung thành (Z >= 11.0m)
             if (ballState.position.z >= 11.0f || ballState.position.y < 0f || ballState.position.z > 14.0f)
             {
+                ballDriver.Freeze();
                 ResolveShotOutcome();
             }
         }
 
         private void ResolveShotOutcome()
         {
-            isBallInFlight = false;
-
             // Kiểm tra phân loại bàn thắng
             float x = ballState.position.x;
             float y = ballState.position.y;
@@ -219,7 +215,7 @@ namespace Eleven.UI
             bool isSaved = false;
 
             // Kiểm tra khoảng cách tới thủ môn
-            if (goalkeeper != null)
+            if (goalkeeper != null && ballTransform != null)
             {
                 float distToKeeper = Vector3.Distance(ballTransform.position, goalkeeper.CurrentPosition);
                 if (distToKeeper <= 0.85f)
@@ -272,7 +268,10 @@ namespace Eleven.UI
                 ballTrail.emitting = true;
             }
 
-            currentReplayPlayer = new ReplayPlayer(lastKickData, playbackSpeed: 0.35f);
+            currentReplayPlayer = new ReplayPlayer();
+            currentReplayPlayer.Load(lastKickData);
+            currentReplayPlayer.SetPlaybackSpeed(0.35f);
+            currentReplayPlayer.Play();
             isReplayActive = true;
 
             SetCameraReplay();

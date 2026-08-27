@@ -20,6 +20,7 @@ namespace Eleven.Keeper
         private bool isDiving;
         private BayesianKeeperBrain brain;
         private KeeperProfile profile;
+        private ShotHistory history;
 
         public Vector3 CurrentPosition => transform.position;
 
@@ -32,8 +33,10 @@ namespace Eleven.Keeper
             profile.readAccuracy = 0.55f; // 55% đoán đúng hướng
             profile.reactionMs = 220f;    // 220ms phản xạ
             profile.commitOffsetMs = -80f;// Cam kết trước lúc bóng bay
+            profile.memoryWeight = 0.4f;
 
-            brain = new BayesianKeeperBrain(profile);
+            brain = new BayesianKeeperBrain();
+            history = new ShotHistory();
         }
 
         public void ResetToHome()
@@ -50,17 +53,23 @@ namespace Eleven.Keeper
         public void ReactToShot(float3 launchVelocity, float3 spin, uint seed)
         {
             // Trích xuất tín hiệu và suy luận góc đổ người
-            var cue = new KeeperCue
+            float latOffset = launchVelocity.x > 0 ? 0.18f : -0.18f;
+            float hipYaw = Mathf.Atan2(launchVelocity.x, launchVelocity.z) * Mathf.Rad2Deg;
+
+            var cues = new KeeperCues
             {
-                hipAngle = Mathf.Atan2(launchVelocity.x, launchVelocity.z),
-                plantFootOffset = new float3(launchVelocity.x > 0 ? -0.3f : 0.3f, 0f, 0f),
-                runUpAngle = 0.1f
+                plantFootLateralOffset = latOffset,
+                hipYawDegrees = hipYaw,
+                approachAngleDegrees = hipYaw * 0.8f,
+                runUpLength = 3.5f,
+                timeToContact = 0.05f,
+                observability = 0.9f
             };
 
-            var read = brain.Infer(cue, seed);
+            var read = brain.Infer(cues, history, profile, seed);
 
             // Dự đoán ô mục tiêu (0..8)
-            int targetCell = read.targetCell;
+            int targetCell = read.bestCell;
             float3 cellCenter = GoalFrame.CellCenter(targetCell);
 
             // Xác định điểm bay người mục tiêu

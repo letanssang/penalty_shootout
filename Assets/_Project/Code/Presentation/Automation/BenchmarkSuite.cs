@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
 using Unity.Mathematics;
+using Eleven.Ball;
+using Eleven.Shooter;
+using Eleven.Match;
 using Eleven.Presentation;
 
 namespace Eleven.Presentation.Automation
@@ -24,39 +27,54 @@ namespace Eleven.Presentation.Automation
         public static List<ReplayKickData> GenerateStandard20Replays()
         {
             var list = new List<ReplayKickData>(StandardReplayCount);
+            var p = BallParams.Default;
 
             for (uint i = 0; i < StandardReplayCount; i++)
             {
                 uint seed = 20260827u + i * 101u;
                 var rng = new Unity.Mathematics.Random(seed);
 
-                // Điểm ngắm và vận tốc phân bổ đều khắp khung thành
                 float targetX = rng.NextFloat(-3.2f, 3.2f);
                 float targetY = rng.NextFloat(0.4f, 2.2f);
                 float speed = rng.NextFloat(22.0f, 32.0f);
 
-                float3 launchVel = new float3(
-                    targetX * 0.8f,
-                    targetY * 0.9f,
-                    speed
-                );
-
-                // Xoáy (spin) từ sút thẳng (knuckle ~0) đến xoáy mạnh 8-10 vòng/giây
+                float3 aim = new float3(targetX, targetY, 11.0f);
                 float3 spin = (i % 4 == 0)
-                    ? float3.zero // Knuckleball
-                    : new float3(rng.NextFloat(-2f, 2f), rng.NextFloat(-8f, 8f), rng.NextFloat(-2f, 2f));
+                    ? float3.zero
+                    : new float3(rng.NextFloat(-2f, 2f), rng.NextFloat(-8f, 8f), 0f);
 
-                var kick = new ReplayKickData(
-                    seed: seed,
-                    shooterId: (int)(i % 5),
-                    keeperId: 1,
-                    strikeType: (int)(i % 4),
-                    launchPosition: new float3(0f, 0.11f, 0f),
-                    launchVelocity: launchVel,
-                    spin: spin,
-                    flightDuration: rng.NextFloat(0.40f, 0.55f),
-                    result: (i % 3 == 0) ? (byte)2 : (byte)1 // Ghi bàn / Cản phá
-                );
+                ShotType type = (i % 4 == 0) ? ShotType.Knuckle : (i % 3 == 0 ? ShotType.InsideFoot : ShotType.Instep);
+
+                float3 origin = new float3(0f, p.radius, 0f);
+                float3 dir = math.normalize(aim - origin);
+                float3 initVel = dir * speed;
+
+                var startState = new BallState
+                {
+                    position = origin,
+                    velocity = initVel,
+                    spin = spin
+                };
+
+                ShotOutcome outcome = GoalGeometry.Classify(in startState, in p, out float3 crossing, out int cell);
+
+                var kick = new ReplayKickData
+                {
+                    seed = seed,
+                    intent = new ShotIntent
+                    {
+                        aimPoint = aim,
+                        spin = spin,
+                        speed = speed,
+                        type = type,
+                        quality = 0.95f,
+                        unstable = type == ShotType.Knuckle,
+                        scatterRadius = 0.05f
+                    },
+                    expectedOutcome = outcome,
+                    expectedCrossing = crossing,
+                    expectedCell = cell
+                };
 
                 list.Add(kick);
             }

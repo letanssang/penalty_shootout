@@ -38,14 +38,16 @@ namespace Eleven.Presentation.Automation
             s_trianglesList.Clear();
 
             long totalGcAlloc = 0;
+            var player = new ReplayPlayer();
 
             // Chạy từng kịch bản qua ReplayPlayer
             for (int i = 0; i < kicks.Count; i++)
             {
                 var kick = kicks[i];
-                var player = new ReplayPlayer(kick, 1.0f);
+                player.Load(kick);
+                player.Play();
 
-                while (player.IsPlaying)
+                while (player.IsPlaying && !player.HasCompleted)
                 {
                     player.Tick(1f / 60f);
                     totalFrames++;
