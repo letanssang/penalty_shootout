@@ -2,6 +2,9 @@
     "name": "Eleven.UI",
     "rootNamespace": "Eleven.UI",
     "references": [
+        "Eleven.Ball",
+        "Eleven.Keeper",
+        "Eleven.Shooter",
         "Eleven.Match",
         "Eleven.Presentation",
         "Unity.Mathematics",

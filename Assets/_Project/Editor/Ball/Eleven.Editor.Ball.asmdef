@@ -3,7 +3,11 @@
     "rootNamespace": "",
     "references": [
         "Eleven.Ball",
+        "Eleven.Keeper",
+        "Eleven.Shooter",
         "Eleven.Match",
+        "Eleven.Presentation",
+        "Eleven.UI",
         "Unity.Mathematics",
         "Unity.Collections",
         "Unity.Burst"
