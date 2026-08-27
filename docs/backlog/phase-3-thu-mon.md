@@ -18,7 +18,7 @@ nếu không bạn sẽ không bao giờ tái hiện được một tình huốn
 > - T19: 9 test trong [KeeperControllerTests.cs](../../Assets/_Project/Tests/EditMode/KeeperControllerTests.cs)
 >
 > **CẬP NHẬT 2026-08-27: T21 — XONG.** Phase 3 đã đủ 6/6 task.
-> `SaveResolverTests` **26/26 xanh**; toàn bộ EditMode **423 test, 422 xanh, 0 đỏ, 1 bỏ qua** (87.3 s;
+> `SaveResolverTests` **26/26 xanh**; toàn bộ EditMode **446 test, 445 xanh, 0 đỏ, 1 bỏ qua** (85.1 s;
 > test bỏ qua là `[Ignore]` cố ý của T25). Kiểm thử đột biến: **12/12 đột biến bị giết**.
 > Đọc phần *Hai chỗ đi lệch khỏi đặc tả* ở T21 trước khi động vào code đó.
 
@@ -204,17 +204,19 @@ namespace Eleven.Keeper {
 - [x] `deflectVelocity` bảo toàn năng lượng hợp lý, không bắn bóng nhanh hơn lúc tới — **XANH 2026-08-27**: `DeflectVelocity_KhongBaoGioNhanhHonLucToi` (chuẩn hoá hướng rồi mới nhân `restitution * speed`, nên `|v'| = restitution·|v| ≤ |v|` đúng bằng định nghĩa, không phụ thuộc sai số trôi), `DeflectVelocity_DayBongRaXaBanTay`, `HuongBatRa_PhuThuocChatLuongTiepXuc`
 - [x] Khoảng cách tay-bóng lớn hơn tầm với → luôn `Missed`, không có ngoại lệ ngẫu nhiên — **XANH 2026-08-27**: `TayXaHonTamVoi_LuonMissed_KhongCoNgoaiLeNgauNhien` quét nhiều seed (điều cần loại trừ là "thỉnh thoảng may mắn cản được", nên một seed là không đủ); kèm `TayVuaDuTamVoi_KhongBaoGioMissed` chốt biên bên kia và `HandDistanceLaNaN_CoiLaHutTam_KhongNemLoi`
 - [x] Cùng seed cho cùng kết quả — **XANH 2026-08-27**: `CungSeed_ChoCungKetQua_VaCungVectorBatRa` (khớp cả `SaveResult` lẫn từng thành phần của `deflectVelocity`), `DoiSeed_ThiKetQuaPhaiThayDoi_KhongPhaiHangSo` (chốt chiều ngược lại — hằng số cũng "tất định"), `SeedBangKhong_KhongNemLoi`
-- [x] Phân bố trên 1000 lượt khớp `parryChance` của profile, sai số dưới 3% — **XANH 2026-08-27**: `PhanBo1000Luot_KhopParryChance_SaiSoDuoi3PhanTram` và `PhanBoMauLon_KhopParryChance_SaiSoDuoi1PhanTram`. Đo ở `NominalSpeed` (xem *Diễn giải 2* dưới đây): `0.70 → 69.70 %` (1000 lượt) / `70.38 %` (20000) · `0.45 → 44.20 % / 45.49 %` · `0.28 → 27.70 % / 28.35 %`
+- [x] Phân bố trên 1000 lượt khớp `parryChance` của profile, sai số dưới 3% — **XANH 2026-08-27**: `PhanBo1000Luot_KhopParryChance_SaiSoDuoi3PhanTram` và `PhanBoMauLon_KhopParryChance_SaiSoDuoi1PhanTram`. Đo ở `NominalSpeed` (xem *Lệch 2* dưới đây): `0.70 → 69.70 %` (1000 lượt) / `70.38 %` (20000) · `0.45 → 44.20 % / 45.49 %` · `0.28 → 27.70 % / 28.35 %`
 
 **Bằng chứng sống**
 
 ```
 -runTests -batchmode -nographics -testPlatform EditMode
 SaveResolverTests:  total=26  passed=26  failed=0  skipped=0
-TOÀN BỘ EditMode:   total=423 passed=422 failed=0  skipped=1  (87.3 s)
+TOÀN BỘ EditMode:   total=446 passed=445 failed=0  skipped=1  (85.1 s)
 ```
 
-Một test bỏ qua là `[Ignore]` cố ý của T25 (`MoPhong1000Luot_TiLeCanPha_DungBangMucTieu`), chưa liên quan tới T21.
+Một test bỏ qua là `[Ignore]` cố ý của T25 (`MoPhong1000Luot_TiLeCanPha_DungBangMucTieu`), chưa liên
+quan tới T21. Con số 446 là lượt chạy trên cây làm việc *sau khi* Phase 5 đã nhập vào; ngay lúc T21
+vừa xong, trước Phase 5, lượt chạy là 423 test / 422 xanh. Riêng 26 test của T21 không đổi ở cả hai lượt.
 
 **Kiểm thử đột biến — 12/12 đột biến bị giết.** Bộ test chỉ có giá trị nếu nó đỏ khi code sai,
 nên tôi sửa hỏng code có chủ đích 12 kiểu rồi chạy lại; mỗi kiểu đều bị ít nhất một test bắt:
@@ -233,6 +235,13 @@ nên tôi sửa hỏng code có chủ đích 12 kiểu rồi chạy lại; mỗi
 | M10 đo khoảng cách 3D thay vì trong mặt phẳng | `HandDistanceToBall_DoTrongMatPhang_BoQuaZ` |
 | M11 hoán đổi bán kính bay người / đứng tại chỗ | `CatchRadius_BayNguoi_NhoHon_DungTaiCho` + 2 |
 | M12 phá chuyển tiếp `GoalGeometry → GoalFrame` | `GoalFrame_KhopGoalGeometry_MotNguonSuThat` |
+
+Vòng đột biến còn phát hiện một lỗi của *chính bộ test*: hai test GC (`KeeperReach_KhongCapPhatGC`,
+`Resolve_KhongCapPhatGC`) đỏ giả dưới 6 đột biến chẳng liên quan gì tới cấp phát bộ nhớ. Nguyên nhân:
+lần gọi đầu tiên của một phương thức luôn cấp phát cho việc JIT biên dịch nó, và
+`Is.Not.AllocatingGCMemory()` đếm cả phần đó — cứ assembly nào vừa build lại là đỏ. Đã sửa bằng cách
+gọi hâm nóng một lượt trước khi đo; chạy lại 6 đột biến đó thì mỗi đột biến chỉ còn bị đúng test cần
+bắt nó bắt. **Test đỏ giả cũng nguy hiểm như test không bao giờ đỏ** — nó dạy người ta bỏ qua màu đỏ.
 
 ### Hai chỗ đi lệch khỏi đặc tả — đọc trước khi sửa T21
 

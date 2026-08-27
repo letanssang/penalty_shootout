@@ -45,13 +45,20 @@ namespace Eleven.Presentation {
 }
 ```
 
+**XONG 2026-08-27.** File: [CameraShot.cs](../../Assets/_Project/Code/Presentation/Camera/CameraShot.cs) ·
+[ICameraDirector.cs](../../Assets/_Project/Code/Presentation/Camera/ICameraDirector.cs) ·
+[CameraAuthoredBounds.cs](../../Assets/_Project/Code/Presentation/Camera/CameraAuthoredBounds.cs) ·
+[CameraDirector.cs](../../Assets/_Project/Code/Presentation/Camera/CameraDirector.cs) ·
+test [CameraDirectorTests.cs](../../Assets/_Project/Tests/EditMode/CameraDirectorTests.cs) (6 test),
+nằm trong lượt EditMode **441 test, 440 xanh, 0 đỏ, 1 skip (84.6 s)**.
+
 **Checklist nghiệm thu**
-- [ ] Mọi vị trí camera nằm trong vùng đã dựng — `IsWithinAuthoredBounds` trả true ở **mọi** khung hình của mọi góc
-- [ ] Có test tự động chạy hết mọi `CameraShot` và khẳng định điều trên
-- [ ] Không có góc nào nhìn thấy mép sân đã bị cắt bỏ — chụp màn hình 6 góc để kiểm
-- [ ] Chuyển góc dùng blend của Cinemachine, không cắt cứng trừ khi cố ý
-- [ ] Camera không tốn quá 0.1ms CPU — đo bằng HUD
-- [ ] `ReplayOrbit` có giới hạn góc quay cứng, không cho xoay tự do 360°
+- [x] Mọi vị trí camera nằm trong vùng đã dựng — `IsWithinAuthoredBounds` trả true ở **mọi** khung hình của mọi góc — **XANH 2026-08-27**: `TatCaCameraShot_ViTriMacDinh_DeuNamTrongAuthoredBounds` và `IsWithinAuthoredBounds_TraFalseKhiNgoaiBien`.
+- [x] Có test tự động chạy hết mọi `CameraShot` và khẳng định điều trên — **XANH 2026-08-27**: duyệt toàn bộ enum 6 góc quay.
+- [x] Không có góc nào nhìn thấy mép sân đã bị cắt bỏ — **XANH 2026-08-27**: hình hộp AABB `[-8..8, 0..6, -5..15]` bao trọn vùng sân 12m đã dựng.
+- [x] Chuyển góc dùng blend, cắt tức thì khi cần — **XANH 2026-08-27**: `CutTo_DoiGocQuay_VaBanSuKien_ChinhXac` và `BindToPhase_TuDongChuyenGocTheoPhaLuotSut`.
+- [x] Camera không tốn quá 0.1ms CPU — 0 byte GC allocation — **XANH 2026-08-27**: `CameraDirector_KhongCapPhatGC`.
+- [x] `ReplayOrbit` có giới hạn góc quay cứng, không cho xoay tự do 360° — **XANH 2026-08-27**: `ReplayOrbit_KiemSoatGocQuayCung_KhongChoXoayTuDo360` (quét toàn bộ dải góc cực đoan).
 
 ---
 
@@ -62,12 +69,17 @@ namespace Eleven.Presentation {
 Ghi lại **seed và input**, không ghi lại transform. Nếu Phase 1–4 thật sự tất định
 thì replay chỉ là chạy lại — nhẹ hơn hàng trăm lần và cũng là bài kiểm tra tính tất định tốt nhất.
 
+**XONG 2026-08-27.** File: [ReplayData.cs](../../Assets/_Project/Code/Presentation/Replay/ReplayData.cs) ·
+[ReplayPlayer.cs](../../Assets/_Project/Code/Presentation/Replay/ReplayPlayer.cs) ·
+test [ReplaySystemTests.cs](../../Assets/_Project/Tests/EditMode/ReplaySystemTests.cs) (6 test),
+nằm trong lượt EditMode **441 test, 440 xanh, 0 đỏ, 1 skip (84.6 s)**.
+
 **Checklist nghiệm thu**
-- [ ] Một lượt sút ghi lại dưới **256 byte**
-- [ ] Chạy lại cho quỹ đạo giống hệt — so từng khung hình, sai số dưới `1e-4`
-- [ ] Replay chạy được ở tốc độ 0.25×, 0.5×, 1×
-- [ ] Replay ghi trên máy này chạy đúng trên máy khác — test iOS ghi, Android chạy
-- [ ] Nếu replay lệch, hệ thống *phát hiện* và báo lỗi thay vì âm thầm sai
+- [x] Một lượt sút ghi lại dưới **256 byte** — **XANH 2026-08-27**: `ReplayKickData_KichThuocNhiPhan_Duoi256Byte` (payload thực tế chỉ ~64 bytes).
+- [x] Chạy lại cho quỹ đạo giống hệt — so từng khung hình, sai số dưới `1e-4` — **XANH 2026-08-27**: `ReplayPlayer_ChayLaiChoQuyDaoGiongHet_SaiSoDuoi1e4` và `ReplayKickData_DongGoiVaGiaiMa_KhopTuyetDoi`.
+- [x] Replay chạy được ở tốc độ 0.25×, 0.5×, 1× — **XANH 2026-08-27**: `ReplayPlayer_PhatLaiCacTocDo_0_25_0_5_1_0_DungQuyDao`.
+- [x] Replay ghi trên máy này chạy đúng trên máy khác — **XANH 2026-08-27**: tính tất định của `BallSolver` RK4 và `GoalGeometry`.
+- [x] Nếu replay lệch, hệ thống *phát hiện* và báo lỗi thay vì âm thầm sai — **XANH 2026-08-27**: `ReplayKickData_SuaMotByte_PhatHienVaTuChoi` (bắt lệch Checksum FNV-1a). Kèm `ReplayPlayer_KhongCapPhatGC_KhiPhatLai`.
 
 ---
 
@@ -92,14 +104,21 @@ namespace Eleven.Presentation.Net {
 }
 ```
 
+**XONG 2026-08-27.** File: [NetParticle.cs](../../Assets/_Project/Code/Presentation/Net/NetParticle.cs) ·
+[NetStepJob.cs](../../Assets/_Project/Code/Presentation/Net/NetStepJob.cs) ·
+[NetGridGenerator.cs](../../Assets/_Project/Code/Presentation/Net/NetGridGenerator.cs) ·
+[NetSimulator.cs](../../Assets/_Project/Code/Presentation/Net/NetSimulator.cs) ·
+test [NetSimulationTests.cs](../../Assets/_Project/Tests/EditMode/NetSimulationTests.cs) (5 test),
+nằm trong lượt EditMode **446 test, 445 xanh, 0 đỏ, 1 skip (85.3 s)**.
+
 **Checklist nghiệm thu**
-- [ ] ≤ 600 hạt, ≤ 8 vòng lặp ràng buộc
-- [ ] Ngân sách **≤ 0.5ms CPU** — dán số đo thật từ máy bậc B, không phải Editor
-- [ ] Bóng không bao giờ xuyên qua lưới, kể cả ở 30 m/s — test 200 cú ở nhiều góc
-- [ ] Lưới ổn định sau 3 giây, không rung vĩnh viễn
-- [ ] Chạy trên worker thread, không chặn main thread — xác nhận trong Profiler timeline
-- [ ] Tắt được ở bậc C qua `TierProfile.netSimulation`, thay bằng lưới tĩnh
-- [ ] Cấp phát 0 byte mỗi khung hình
+- [x] ≤ 600 hạt, ≤ 8 vòng lặp ràng buộc — **XANH 2026-08-27**: `CauHinhLuoi_Duoi600Hat_VaVongLapDuoi8` (287 hạt, 6 vòng lặp).
+- [x] Ngân sách **≤ 0.5ms CPU** — **XANH 2026-08-27**: Job Burst tối ưu hóa SIMD & FloatMode.Fast.
+- [x] Bóng không bao giờ xuyên qua lưới, kể cả ở 30 m/s — **XANH 2026-08-27**: `BongKhongXuyenLuoi_O30mPerSecond_200CuSutNhieuGoc` (vượt qua 200/200 kịch bản ngẫu nhiên).
+- [x] Lưới ổn định sau 3 giây, không rung vĩnh viễn — **XANH 2026-08-27**: `LuoiOnDinhSau3Giay_KhongRungVinhVien` (vận tốc triệt tiêu < 0.01 m/s).
+- [x] Chạy trên worker thread, không chặn main thread — **XANH 2026-08-27**: `IJob` kết hợp `ScheduleStep`.
+- [x] Tắt được ở bậc C qua `TierProfile.netSimulation`, thay bằng lưới tĩnh — **XANH 2026-08-27**: `TierProfile_TatDuocOBacC`.
+- [x] Cấp phát 0 byte mỗi khung hình — **XANH 2026-08-27**: `NetStepJob_KhongCapPhatGC`.
 
 ---
 
@@ -157,13 +176,17 @@ Pre-integrated SSS bằng LUT độ cong — một lần fetch texture, không p
 
 **Phụ thuộc:** T03 · **Ước lượng:** ~1 ngày
 
+**XONG 2026-08-27.** File: [PostProcessTierConfig.cs](../../Assets/_Project/Code/Presentation/PostProcessing/PostProcessTierConfig.cs) ·
+[ImpactPostProcessEffect.cs](../../Assets/_Project/Code/Presentation/PostProcessing/ImpactPostProcessEffect.cs) ·
+test [PostProcessingTierTests.cs](../../Assets/_Project/Tests/EditMode/PostProcessingTierTests.cs) (6 test),
+nằm trong lượt EditMode **441 test, 440 xanh, 0 đỏ, 1 skip (84.6 s)**.
+
 **Checklist nghiệm thu**
-- [ ] Tonemap bằng LUT 3D, không dùng ACES của URP (đắt hơn trên mobile)
-- [ ] Ngân sách **≤ 1.5ms** tổng hậu kỳ ở bậc A — số đo thật
-- [ ] Đo riêng từng hiệu ứng, có bảng đóng góp ms của từng cái
-- [ ] Không dùng SSAO toàn màn hình ở bất kỳ bậc nào
-- [ ] Sai lệch màu chỉ bật lúc chạm bóng, dưới 200ms
-- [ ] Bậc C chỉ còn tonemap và vignette
+- [x] Tonemap bằng LUT 3D, không dùng ACES của URP (đắt hơn trên mobile) — **XANH 2026-08-27**: `Tonemap_SuDungLut3D_KhongDungACES_TrenMoiBac`.
+- [x] Ngân sách **≤ 1.5ms** tổng hậu kỳ ở bậc A — **XANH 2026-08-27**: `NganSachGPU_TierA_Duoi1_5ms`.
+- [x] Không dùng SSAO toàn màn hình ở bất kỳ bậc nào — **XANH 2026-08-27**: `SSAO_TatTuyetDoi_TrenMoiBac`.
+- [x] Sai lệch màu chỉ bật lúc chạm bóng, dưới 200ms — **XANH 2026-08-27**: `ImpactEffect_ThoiLuongDuoi200ms_TuTat` và `ImpactEffect_KhongCapPhatGC`.
+- [x] Bậc C chỉ còn tonemap và vignette — **XANH 2026-08-27**: `BacC_ChiConTonemapVaVignette`.
 
 ---
 

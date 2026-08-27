@@ -261,6 +261,24 @@ làm lại toàn bộ sau T21.
 T19, nối `readAccuracy` vào một chỗ thực sự có tác dụng (hoặc thêm cue phân biệt hàng), rồi
 mới vặn thông số ba hồ sơ cho khớp 18/28/38.
 
+> **CẬP NHẬT 2026-08-27 — T21 đã xong, điều kiện chặn ở trên đã được gỡ.**
+> Luật cản phá thật nay đã có: [`SaveResolver.Resolve`](../../Assets/_Project/Code/Keeper/SaveResolver.cs)
+> cùng [`KeeperReach`](../../Assets/_Project/Code/Keeper/KeeperReach.cs) (nội suy vị trí tay để sinh
+> `handDistanceToBall`). Bốn việc còn lại, theo đúng thứ tự này:
+>
+> 1. Thay luật tạm "đoán trúng đúng ô" trong `PenaltySim` của
+>    [DifficultyTests.cs](../../Assets/_Project/Tests/EditMode/DifficultyTests.cs) bằng
+>    `KeeperReach.HandDistanceToBall(...)` → `SaveResolver.Resolve(...)`. Đây là việc *đầu tiên*
+>    vì mọi số đo bên dưới đều vô nghĩa nếu vẫn đo qua luật tạm.
+> 2. Sửa mốc cam kết của T19 — xoá test hiện trạng `GoiMoiKhungHinh_..._HIENTRANG` khi nó đỏ.
+> 3. Nối `readAccuracy` vào chỗ có tác dụng: hiện nó chỉ vào `sharpness = 1 + readAcc²·10` đã bão
+>    hoà, nên Thường (0.52) và Khó (0.72) chỉ chênh **0.5 điểm phần trăm** độ chính xác ô. Kèm theo
+>    là hai chỗ hỏng cùng gốc: tín hiệu hàng `runUpLength` có σ = 1.5 m trong khi hàng cách nhau
+>    1.0 m (gần như không mang thông tin), và ngưỡng tự tin của `SimpleKeeperController`
+>    (0.45 / 0.20) nằm rất xa mức ~0.10–0.13 mà bộ não thực sự sinh ra, nên nhánh "đứng giữa" nuốt
+>    83–90 % số cú sút.
+> 4. Chỉ *sau* ba việc trên mới vặn thông số ba hồ sơ cho khớp 18/28/38, rồi bỏ `[Ignore]`.
+
 ---
 
 ← [Phase 3: Thủ môn](phase-3-thu-mon.md) · [Mục lục](README.md) · [Phase 5: Trình diễn](phase-5-trinh-dien.md) →
