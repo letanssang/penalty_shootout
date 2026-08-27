@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using Unity.Mathematics;
@@ -13,7 +14,8 @@ namespace Eleven.UI
 {
     /// <summary>
     /// Vòng lặp điều phối chính của toàn bộ trận đấu Penalty Shootout (Gameplay Orchestrator).
-    /// Kết nối trực tiếp: BallSolver + KeeperBrain + NetSimulator + CameraDirector + ScoreboardUI.
+    /// Cho phép bóng cắm sâu vào trong lưới, rung lắc lưới 3D Verlet và trì hoãn thông báo để người chơi
+    /// chiêm ngưỡng trọn vẹn quỹ đạo bóng và hiệu ứng lưới rung.
     /// </summary>
     public sealed class MatchGameLoop : MonoBehaviour
     {
@@ -29,6 +31,9 @@ namespace Eleven.UI
         private BallDriver ballDriver;
         private BallState ballState;
         private bool isReplayActive = false;
+        private bool isShotActive = false;
+        private bool isShotResolved = false;
+        private float postShotTimer = 0f;
         private ReplayPlayer currentReplayPlayer;
         private ReplayKickData lastKickData;
 
@@ -38,10 +43,10 @@ namespace Eleven.UI
         private uint currentSeed = 1001;
 
         // Vị trí camera
-        private Vector3 behindShooterCamPos = new Vector3(0f, 1.8f, -4.5f);
-        private Vector3 behindShooterCamRot = new Vector3(10f, 0f, 0f);
-        private Vector3 broadcastCamPos = new Vector3(8.5f, 4.0f, 6.0f);
-        private Vector3 replayCamPos = new Vector3(-4.0f, 1.5f, 9.0f);
+        private Vector3 behindShooterCamPos = new Vector3(0f, 1.82f, -9.0f);
+        private Vector3 behindShooterCamRot = new Vector3(6.0f, 0f, 0f);
+        private Vector3 broadcastCamPos = new Vector3(6.5f, 2.6f, 7.5f);
+        private Vector3 replayCamPos = new Vector3(-4.5f, 1.5f, 8.5f);
 
         private void Start()
         {
@@ -83,6 +88,9 @@ namespace Eleven.UI
         private void ResetBall()
         {
             isReplayActive = false;
+            isShotActive = false;
+            isShotResolved = false;
+            postShotTimer = 0f;
 
             if (ballDriver != null)
             {
@@ -112,7 +120,7 @@ namespace Eleven.UI
 
             if (scoreboard != null)
             {
-                scoreboard.ShowBanner("HÃY VUỐT ĐỂ SÚT!", "Vuốt nhanh về phía khung thành để sút bóng", Color.yellow, replayAvailable: false);
+                scoreboard.HideBanner();
             }
 
             SetCameraBehindShooter();
@@ -121,6 +129,9 @@ namespace Eleven.UI
         private void HandleShotFired(float3 launchVelocity, float3 spin)
         {
             currentSeed += 7u;
+            isShotActive = true;
+            isShotResolved = false;
+            postShotTimer = 0f;
 
             ballState = new BallState(new float3(0f, 0.11f, 0f), launchVelocity, spin);
 
@@ -187,34 +198,70 @@ namespace Eleven.UI
                 return;
             }
 
-            if (ballDriver == null || !ballDriver.IsLive) return;
+            if (!isShotActive || ballDriver == null) return;
 
             ballState = ballDriver.State;
 
-            // Cập nhật tương tác Lưới Verlet
+            // 1. Cập nhật mô phỏng Lưới Verlet liên tục
             if (goalNet != null)
             {
                 goalNet.UpdateSimulation(dt, ballState.position, ballState.velocity, 0.11f);
             }
 
-            // Kiểm tra khi bóng bay đến vạch vôi khung thành (Z >= 11.0m)
+            // 2. Xử lý vật lý khi bóng bay vào trong lưới (Z >= 11.0m đến 12.6m)
+            if (ballState.position.z >= 11.0f && ballState.position.z <= 12.8f)
+            {
+                bool isInsideGoal = (Mathf.Abs(ballState.position.x) <= 3.66f && ballState.position.y >= 0f && ballState.position.y <= 2.44f);
+                if (isInsideGoal)
+                {
+                    // Lực cản của lưới làm bóng chậm lại và rơi xuống cỏ tự nhiên
+                    float3 dragVel = ballState.velocity * Mathf.Max(0f, 1f - dt * 6.5f);
+                    dragVel.y -= 9.81f * dt * 0.4f; // Trọng lực nhẹ rơi xuống cỏ
+
+                    if (ballState.position.y < 0.11f)
+                    {
+                        dragVel.y = 0f;
+                        dragVel.x *= 0.5f;
+                        dragVel.z *= 0.5f;
+                    }
+
+                    ballState.velocity = dragVel;
+                    ballState.position += ballState.velocity * dt;
+                    if (ballState.position.y < 0.11f)
+                    {
+                        var p = ballState.position;
+                        p.y = 0.11f;
+                        ballState.position = p;
+                    }
+
+                    if (ballTransform != null)
+                    {
+                        ballTransform.position = (Vector3)(float3)ballState.position;
+                    }
+                }
+            }
+
+            // 3. Đợi 1.4 giây sau khi bóng qua vạch vôi hoặc chạm lưới để hiển thị kết quả
             if (ballState.position.z >= 11.0f || ballState.position.y < 0f || ballState.position.z > 14.0f)
             {
-                ballDriver.Freeze();
-                ResolveShotOutcome();
+                postShotTimer += dt;
+                if (postShotTimer >= 1.4f && !isShotResolved)
+                {
+                    isShotResolved = true;
+                    ballDriver.Freeze();
+                    ResolveShotOutcome();
+                }
             }
         }
 
         private void ResolveShotOutcome()
         {
-            // Kiểm tra phân loại bàn thắng
             float x = ballState.position.x;
             float y = ballState.position.y;
 
             bool isInsideGoal = (Mathf.Abs(x) <= 3.66f && y >= 0f && y <= 2.44f);
             bool isSaved = false;
 
-            // Kiểm tra khoảng cách tới thủ môn
             if (goalkeeper != null && ballTransform != null)
             {
                 float distToKeeper = Vector3.Distance(ballTransform.position, goalkeeper.CurrentPosition);
@@ -226,26 +273,22 @@ namespace Eleven.UI
 
             if (isInsideGoal && !isSaved)
             {
-                // BÀN THẮNG!
                 homeKicks.Add(KickResult.Scored);
                 if (scoreboard != null)
                 {
-                    scoreboard.ShowBanner("⚽ VÀO OOOO!", "Cú sút tuyệt đỉnh găm thẳng vào lưới!", Color.green, replayAvailable: true);
+                    scoreboard.ShowBanner("⚽ VÀO OOOO!", "Cú sút tuyệt đỉnh găm thẳng vào góc lưới!", Color.green, replayAvailable: true);
                 }
-                SetCameraBroadcast();
             }
             else if (isSaved)
             {
-                // THỦ MÔN CẢN PHÁ!
                 homeKicks.Add(KickResult.Missed);
                 if (scoreboard != null)
                 {
-                    scoreboard.ShowBanner("🧤 BỊ CẢN PHÁ!", "Thủ môn đã bay người xuất thần cứu thua!", new Color(1f, 0.4f, 0.2f), replayAvailable: true);
+                    scoreboard.ShowBanner("🧤 BỊ CẢN PHÁ!", "Thủ môn đã bay người xuất thần cứu thua!", new Color(1f, 0.45f, 0.15f), replayAvailable: true);
                 }
             }
             else
             {
-                // BÓNG BAY RA NGOÀI HOẶC TRÚNG CỘT
                 homeKicks.Add(KickResult.Missed);
                 string reason = (Mathf.Abs(x) > 3.66f) ? "Bóng bay chệch cột dọc!" : "Bóng bay vọt xà ngang!";
                 if (scoreboard != null)
@@ -287,7 +330,6 @@ namespace Eleven.UI
             currentKickIndex++;
             if (currentKickIndex >= 5)
             {
-                // Tổng kết trận đấu
                 int goals = 0;
                 for (int i = 0; i < homeKicks.Count; i++)
                 {

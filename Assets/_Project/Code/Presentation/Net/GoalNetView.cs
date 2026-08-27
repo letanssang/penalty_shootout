@@ -22,7 +22,7 @@ namespace Eleven.Presentation.Net
         {
             if (isInitialized) return;
 
-            // Khởi tạo NetSimulator (287 hạt Verlet)
+            // Khởi tạo NetSimulator (287 hạt Verlet, z = 11.0m đến 12.8m)
             simulator = new NetSimulator(17, 9, 5);
 
             var particles = simulator.Particles;
@@ -62,10 +62,11 @@ namespace Eleven.Presentation.Net
             var mr = GetComponent<MeshRenderer>();
             var netShader = Shader.Find("Universal Render Pipeline/Unlit") 
                          ?? Shader.Find("Sprites/Default") 
-                         ?? Shader.Find("Universal Render Pipeline/Lit");
+                         ?? Shader.Find("Unlit/Color");
             var netMat = new Material(netShader);
-            netMat.color = new Color(0.90f, 0.95f, 1.0f, 0.85f);
+            netMat.color = new Color(0.92f, 0.96f, 1.0f, 0.95f);
             if (netMat.HasProperty("_BaseColor")) netMat.SetColor("_BaseColor", netMat.color);
+            if (netMat.HasProperty("_Color")) netMat.SetColor("_Color", netMat.color);
             mr.material = netMat;
 
             isInitialized = true;
