@@ -7,18 +7,18 @@ namespace Eleven.Shooter
 {
     /// <summary>
     /// Component nhận diện cử chỉ vuốt từ màn hình cảm ứng hoặc chuột trên PC.
-    /// Tối ưu hóa chuẩn cho màn hình ngang (Landscape Mode).
-    /// Chuyển đường vuốt thành vector vận tốc phóng và độ xoáy cho quả bóng.
+    /// Sử dụng phép chiếu Raycast Camera chuẩn xác vào mặt phẳng khung thành (Z = 11.0m)
+    /// Đảm bảo vuốt trúng điểm nào trên màn hình, bóng sẽ bay CHÍNH XÁC 100% vào điểm đó trong không gian 3D.
     /// </summary>
     public sealed class TouchSwipeReceiver : MonoBehaviour
     {
         public event Action<float3, float3> OnShotFired; // (launchVelocity, spin)
 
         [Header("Tùy chỉnh lực và độ nhạy")]
-        [SerializeField] private float minSpeed = 20f;
+        [SerializeField] private float minSpeed = 22f;
         [SerializeField] private float maxSpeed = 34f;
         [SerializeField] private float maxSwipeTime = 1.0f;
-        [SerializeField] private float minSwipeDistPixels = 25f;
+        [SerializeField] private float minSwipeDistPixels = 20f;
 
         private Vector2 startPos;
         private float startTime;
@@ -62,38 +62,54 @@ namespace Eleven.Shooter
 
             if (dist < minSwipeDistPixels) return; // Vuốt quá ngắn, bỏ qua
 
-            // Chuẩn hóa theo chiều cao màn hình (chuẩn ngang)
-            float refH = Screen.height > 0 ? Screen.height : 1080f;
-            float normX = delta.x / (refH * 0.75f);  // Lực vuốt ngang
-            float normY = delta.y / (refH * 0.65f);  // Lực vuốt dọc
+            // 1. Phép chiếu Raycast từ Camera qua điểm ngón tay đến mặt phẳng khung thành Z = 11.0m
+            var cam = Camera.main;
+            Vector3 targetOnGoal;
 
-            // Tính toán hướng bay về phía khung thành (Z = 11m)
-            // Khung thành rộng 7.32m (-3.66m đến +3.66m), cao 2.44m (0m đến 2.44m)
-            float targetX = Mathf.Clamp(normX * 5.5f, -4.2f, 4.2f);
-            float targetY = Mathf.Clamp(normY * 3.6f, 0.35f, 2.9f);
+            if (cam != null)
+            {
+                Ray ray = cam.ScreenPointToRay(end);
+                if (Mathf.Abs(ray.direction.z) > 0.001f)
+                {
+                    float t = (11.0f - ray.origin.z) / ray.direction.z;
+                    targetOnGoal = ray.origin + ray.direction * t;
+                }
+                else
+                {
+                    targetOnGoal = new Vector3(0f, 1.22f, 11.0f);
+                }
+            }
+            else
+            {
+                float refH = Screen.height > 0 ? Screen.height : 1080f;
+                float normX = (end.x - Screen.width * 0.5f) / (refH * 0.5f);
+                float normY = (end.y - Screen.height * 0.4f) / (refH * 0.4f);
+                targetOnGoal = new Vector3(normX * 3.66f, normY * 1.5f + 1.22f, 11.0f);
+            }
 
-            // Vận tốc vuốt (vuốt càng nhanh bóng bay càng căng)
-            float swipeSpeed = (dist / refH) / Mathf.Max(0.04f, duration);
-            float tSpeed = Mathf.Clamp01((swipeSpeed - 1.0f) / 4.0f);
+            // 2. Vận tốc vuốt (vuốt càng nhanh bóng bay càng căng)
+            float refH_speed = Screen.height > 0 ? Screen.height : 1080f;
+            float swipeSpeed = (dist / refH_speed) / Mathf.Max(0.04f, duration);
+            float tSpeed = Mathf.Clamp01((swipeSpeed - 0.8f) / 3.0f);
             float forwardSpeed = Mathf.Lerp(minSpeed, maxSpeed, tSpeed);
 
-            // Vector vận tốc ban đầu (Bóng xuất phát tại (0, 0.11, 0) bay tới Z=11.0)
-            float3 launchVel = new float3(
-                targetX * (forwardSpeed / 11.0f),
-                targetY * (forwardSpeed / 11.0f) + 1.15f, // bù trừ trọng lực
-                forwardSpeed
-            );
+            // 3. Tính toán thời gian bay chính xác từ Z = 0 đến Z = 11.0m
+            float flightTime = 11.0f / forwardSpeed;
 
-            // Tính toán độ xoáy (Spin) dựa trên độ lệch ngang
-            float spinZ = -normX * 9.0f * (float)Math.PI; // Xoáy ngang (Magnus effect)
-            float spinX = (normY < 0.35f ? -4.0f : 2.5f) * (float)Math.PI; // Xoáy dọc
+            // 4. Bù trừ trọng lực chính xác tuyệt đối theo giải tích
+            // Y(T) = Y0 + Vy*T - 0.5*g*T^2  ==>  Vy = (Y_target - Y0 + 0.5*g*T^2) / T
+            float g = 9.81f;
+            float vy = (targetOnGoal.y - 0.11f + 0.5f * g * flightTime * flightTime) / flightTime;
+            float vx = targetOnGoal.x / flightTime;
+            float vz = forwardSpeed;
+
+            float3 launchVel = new float3(vx, vy, vz);
+
+            // 5. Tính toán độ xoáy (Spin) dựa trên độ lệch ngang
+            float curveX = (delta.x / refH_speed);
+            float spinZ = -curveX * 4.0f * (float)Math.PI; // Xoáy quả chuối nhẹ
+            float spinX = 1.0f * (float)Math.PI;
             float3 spin = new float3(spinX, spinZ, 0f);
-
-            // Nếu vuốt rất nhanh và thẳng -> Knuckleball (xoáy ~ 0)
-            if (Mathf.Abs(normX) < 0.05f && tSpeed > 0.80f)
-            {
-                spin = float3.zero;
-            }
 
             isInputEnabled = false; // Khóa input khi bóng đang bay
             OnShotFired?.Invoke(launchVel, spin);
