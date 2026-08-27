@@ -8,12 +8,32 @@
 
 Sau khi T06 và T07 xong, các task còn lại chạy song song được.
 
-> **Trạng thái 2026-08-26 (chiều): ĐÃ CHẠY TEST SỐNG — 235/235 xanh, 0 đỏ, 0 bỏ qua, 91.7 s.**
+> **Trạng thái 2026-08-27: 299/300 xanh. Ô đỏ duy nhất KHÔNG thuộc Phase 1** — nó là
+> `KeeperReadTests.T18_1000Lan_ProfileThuong_BestCellDung_50PhanTram` của Phase 3 (T18, đang làm
+> ở phiên khác): tỉ lệ đúng 54.4% so với ngưỡng ≤ 54%, tức một assert thống kê lệch 0.4 điểm phần
+> trăm. Không đụng vào — đó là việc đang dở của người khác.
+>
+> Trước đó cùng ngày: **235/235 xanh, 91.7 s** (khi chưa có test Phase 3 và chưa có
+> `BurstCompatibilityTests`).
 > Lệnh: `Unity 6000.3.22f1 -batchmode -nographics -projectPath . -runTests -testPlatform EditMode`.
+>
+> **Đã build Android thật 2026-08-27** (`./tools/build.sh android` → `android_build/ElevenMetres.apk`,
+> 41 165 232 byte, IL2CPP + ARM64 + Burst AOT, thoát mã 0). Bản build này là bằng chứng cho ô Burst
+> của T06 và ô "không lọt vào build" của T11 — xem hai ô đó.
+>
+> ⚠️ **Sự cố phải biết: `tools/build.sh` từng tự nâng cấp cả dự án.** Nó tìm Unity bằng "bản mới
+> nhất đã cài", máy có thêm 6000.5.9f1 nên nó chọn bản đó thay vì 6000.3.22f1, và Unity lặng lẽ
+> nâng URP 17.3→17.5, collections 2.6.8→6.5.0, mathematics 1.3.3→1.4.0, ugui 2.0→2.5, gỡ
+> `com.unity.modules.vr`, ghi đè `manifest.json` + `packages-lock.json`. Không một dòng cảnh báo.
+> Đã hoàn nguyên và **vá script đọc thẳng `ProjectVersion.txt`** — sai bản thì báo lỗi kèm danh
+> sách bản đã cài chứ không tự chọn.
 > Các bộ test của Phase 1: `BallSolverTests` 19/19 (0.024 s) · `GoalGeometryTests` 21/21 (0.066 s) ·
 > `TrajectoryPredictorTests` 6/6 (0.008 s) · `ParameterFitterTests` 12/12 (88.8 s).
-> Tick dưới đây giờ là **bằng chứng chạy thật**, trừ những ô ghi rõ "CẦN NGƯỜI KIỂM" — các ô đó
-> đòi Burst Inspector, build IL2CPP trên máy thật, hoặc mở cửa sổ Editor, `-batchmode` không thay được.
+> Tick dưới đây giờ là **bằng chứng chạy thật**. Sau ngày 2026-08-27, việc còn cần người thu về
+> đúng **một** loại: **nhìn bằng mắt trong Editor GUI** — 5 ô của T11. Ba việc từng phải chạy trên
+> điện thoại (T07 golden hash qua IL2CPP, T08 đo 0.05 ms, T09 30/60 fps) **đã đo xong trên Pixel 7
+> thật ngày 2026-08-26**; ô Burst Inspector của T06 đã thay bằng test tự động. Hai ô còn lại không
+> phải việc code: T10 (cột trụ) đã được duyệt giữ nguyên, T12 chờ video quay góc ngang.
 >
 > T06–T11 đã có code + test trong repo (T11 gồm cả `TrajectoryWindow.cs`/`TrajectoryGizmos.cs`,
 > trước đó tưởng thiếu vì chỉ tìm trong `Code/`, thực ra nằm ở `Editor/Ball/`).
@@ -78,7 +98,10 @@ namespace Eleven.Ball {
 - [x] Tích phân RK4 hoặc velocity Verlet, **không** dùng Euler tiến — `Step()` là RK4 4 giai đoạn (k1..k4)
 - [x] `DragCoefficient` nội suy mượt giữa `cdVLow` và `cdVHigh`, liên tục về đạo hàm bậc nhất — smoothstep `t*t*(3-2t)`, đạo hàm 0 ở hai đầu khớp đoạn hằng
 - [x] Spin bằng 0 thì lực Magnus đúng bằng 0, không có NaN — `cross(spin, velocity)` không chuẩn hoá spin, spin=0 → 0 chính xác
-- [ ] Biên dịch được với `[BurstCompile]`, không có cảnh báo Burst — **⚠️ cần mở Burst Inspector trong Editor GUI, không kiểm được qua đọc code**
+- [x] Biên dịch được với `[BurstCompile]`, không có cảnh báo Burst — **XANH 2026-08-27, nay kiểm TỰ ĐỘNG** bằng [BurstCompatibilityTests.cs](../../Assets/_Project/Tests/EditMode/BurstCompatibilityTests.cs) (4 test), không còn phải mở Burst Inspector bằng tay.
+  **Đường đi tới đây quan trọng hơn cái tick.** Build Android AOT ngày 2026-08-27 lộ ra một chuyện tệ hơn "chưa kiểm": `lib_burst_generated.txt` của bản build liệt kê đúng **99 hàm, KHÔNG có một hàm `Eleven.*` nào** — toàn bộ thuộc Unity.Collections / Unity.Mathematics / URP / Splines. Tức là **Burst chưa từng biên dịch một dòng nào của dự án**, và câu "không có cảnh báo Burst" trước đó đúng một cách RỖNG. Nguyên nhân nằm ở chính thiết kế đã chọn và vẫn đúng: `[BurstCompile]` chỉ đặt ở cấp lớp (đặt lên method sẽ bật Direct Call, ABI cấm trả struct theo giá trị → BC1064/BC1067 lúc AOT), nên thân hàm chỉ được biên dịch khi CÓ JOB gọi vào — mà job đó thuộc T20, chưa tồn tại.
+  **Cách lấp**: ép Burst biên dịch thật bằng `BurstCompiler.CompileFunctionPointer` trên ba đường nóng (`BallSolver.Step`, `BallSolver.DragCoefficient`, `KnuckleForce.Evaluate`) rồi đối chiếu kết quả với bản managed; chạy đủ 50 bước (0.42 s, đúng pha bay thật) thì hai đường lệch nhau dưới `1e-3` m. Mấu chốt làm test có nghĩa là `EnableBurstCompileSynchronously = true`: để mặc định thì Burst biên dịch bất đồng bộ, `Invoke` chạy stub managed và test xanh dối — đo được: bật đồng bộ làm bộ test chạy từ **0.01 s lên 0.308 s**, gấp 30 lần. Bật đồng bộ cũng khiến lỗi BC (nếu có) được log ngay và Test Framework tự đánh trượt.
+  **CÒN NỢ**: đây là Burst JIT trong Editor, **không phải AOT ARM64**. Hai đường dùng chung frontend nên gần như mọi lỗi BC lộ ra ở cả hai, nhưng lỗi riêng của backend ARM64 thì chỉ build player mới thấy — và chỉ thấy khi T20 có job thật gọi vào solver. **Xem lại ô này ở T20.**
 - [x] Cấp phát bộ nhớ bằng 0 — xác nhận bằng `Assert.That(() => ..., Is.Not.AllocatingGCMemory())` — **XANH 2026-08-26 (chạy sống)**: `Step_KhongCapPhat`, `Integrate_KhongCapPhat` trong `BallSolverTests.cs`
 - [x] Sút thẳng 28 m/s không xoáy: bay hết 11m trong `0.40–0.48s`, rơi `0.75–0.95m` — test `SutThang28_Bay11m_ThoiGianVaDoRoiDung` assert đúng hai khoảng này
 
@@ -226,7 +249,7 @@ Cửa sổ Editor cho phép chỉnh tham số bằng thanh trượt và thấy q
 - [ ] Hiện điểm cắt mặt phẳng khung thành, ô lưới, và kết quả phân loại — `TrajectoryGizmos.DrawCrossing`/`DrawGrid` + label `outcome`/`cell`/`crossing` có trong code — **⚠️ cần nhìn GUI**
 - [ ] So sánh chồng được nhiều quỹ đạo cùng lúc, mỗi cái một màu — danh sách `overlays` + nút "+ Thêm quỹ đạo so sánh", mỗi overlay có `Color` riêng — **⚠️ cần nhìn GUI**
 - [ ] Lưu và tải được preset thành `ScriptableObject` — `TrajectoryPreset : ScriptableObject` + `SavePreset()`/`LoadPreset()` dùng `AssetDatabase` — **⚠️ cần nhìn GUI thao tác thật một lần**
-- [ ] Nằm hoàn toàn trong thư mục `Editor/`, không lọt vào build — `Eleven.Editor.Ball.asmdef` có `"includePlatforms": ["Editor"]`, đúng hướng — **⚠️ kiểm dứt điểm cần so kích thước build trước/sau**
+- [x] Nằm hoàn toàn trong thư mục `Editor/`, không lọt vào build — **XÁC NHẬN TRÊN BUILD THẬT 2026-08-27**. Không so kích thước build (cách đó nhiễu và không kết luận được), mà **mở thẳng APK ra đọc bảng metadata của IL2CPP** (`assets/bin/Data/Managed/Metadata/global-metadata.dat` trong `android_build/ElevenMetres.apk`, 41 165 232 byte): `TrajectoryWindow`, `TrajectoryGizmos`, `ParameterFitter`, `TrajectoryPreset`, `BuildScript`, `BootSceneGenerator`, `TierAssetGenerator` — **cả 7 đều vắng mặt**. Kèm đối chứng dương để phép kiểm không phải là âm tính giả do grep sai: `BallSolver`, `TrajectoryPredictor`, `KnuckleForce`, `TimingWindow`, `ShotMapper`, `GoalGeometry` — **cả 6 đều có mặt**. `Eleven.Editor.Ball.asmdef` với `"includePlatforms": ["Editor"]` làm đúng việc của nó.
 
 ---
 

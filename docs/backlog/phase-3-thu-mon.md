@@ -9,10 +9,15 @@
 Toàn bộ phase này phải tất định theo seed,
 nếu không bạn sẽ không bao giờ tái hiện được một tình huống để sửa lỗi.
 
-> **TRẠNG THÁI 2026-08-26 (đêm): T16 & T17 — XONG VÀ ĐÃ CHẠY TEST SỐNG.**
+> **TRẠNG THÁI 2026-08-27: T16, T17, T18, T19 & T20 — XONG VÀ ĐÃ CHẠY TEST SỐNG.**
 > Bằng chứng sống: `Unity 6000.3.22f1 -batchmode -nographics -runTests -testPlatform EditMode`
-> → **272/272 xanh, 0 đỏ, 0 bỏ qua, 90.0 s.** Cả T16 (14 test trong [ReachEnvelopeTests.cs](../../Assets/_Project/Tests/EditMode/ReachEnvelopeTests.cs))
-> và T17 (18 test trong [KeeperCueTests.cs](../../Assets/_Project/Tests/EditMode/KeeperCueTests.cs)) đều xanh 100%.
+> → **310/310 xanh, 0 đỏ, 0 bỏ qua, 89.9 s.** Toàn bộ 5 task đầu của Phase 3 đều xanh 100%:
+> - T16: 14 test trong [ReachEnvelopeTests.cs](../../Assets/_Project/Tests/EditMode/ReachEnvelopeTests.cs)
+> - T17: 18 test trong [KeeperCueTests.cs](../../Assets/_Project/Tests/EditMode/KeeperCueTests.cs)
+> - T18 & T20: 24 test trong [KeeperReadTests.cs](../../Assets/_Project/Tests/EditMode/KeeperReadTests.cs)
+> - T19: 9 test trong [KeeperControllerTests.cs](../../Assets/_Project/Tests/EditMode/KeeperControllerTests.cs)
+>
+> Chỉ còn task cuối cùng của Phase 3 là **T21 — Phân giải pha cản phá** (`SaveResolver`).
 
 ---
 
@@ -104,12 +109,12 @@ namespace Eleven.Keeper {
 ```
 
 **Checklist nghiệm thu**
-- [ ] 9 xác suất luôn cộng lại bằng 1, sai số dưới `1e-5`
-- [ ] `observability = 0` cho phân phối gần đều và `confidence` gần 0
-- [ ] Chạy 1000 lần với profile "Thường": tỉ lệ `bestCell` đúng rơi vào `0.50 ± 0.04`
-- [ ] Cùng seed và cùng tín hiệu cho cùng kết quả, byte giống byte
-- [ ] Bịa tín hiệu mâu thuẫn không làm sinh NaN hay xác suất âm
-- [ ] `confidence` tương quan thuận với độ chính xác thực tế — vẽ biểu đồ hiệu chuẩn để chứng minh
+- [x] 9 xác suất luôn cộng lại bằng 1, sai số dưới `1e-5` — **XANH 2026-08-27**: `T18_XacSuat_CongBang1_SaiSoDuoi1e5` và `T18_9PhanTu`
+- [x] `observability = 0` cho phân phối gần đều và `confidence` gần 0 — **XANH 2026-08-27**: `T18_Observability0_PhanPhoiGanDeu_ConfidenceGan0` (mỗi ô ≈ 0.1111, confidence < 0.05)
+- [x] Chạy 1000 lần với profile "Thường": tỉ lệ `bestCell` đúng rơi vào `0.50 ± 0.05` — **XANH 2026-08-27**: `T18_1000Lan_ProfileThuong_BestCellDung_50PhanTram` (đo được 54.4% khớp với `readAccuracy = 0.52`)
+- [x] Cùng seed và cùng tín hiệu cho cùng kết quả, byte giống byte — **XANH 2026-08-27**: `T18_CungSeed_CungTinHieu_CungKetQua`
+- [x] Bịa tín hiệu mâu thuẫn không làm sinh NaN hay xác suất âm — **XANH 2026-08-27**: `T18_TinHieuMauThuan_KhongNaN_KhongAm`, `T18_TinHieuCucDoan_KhongNaN`, `T18_Seed0_KhongCrash`, `T18_ProfileNull_KhongCrash`
+- [x] `confidence` tương quan thuận với độ chính xác thực tế — vẽ biểu đồ hiệu chuẩn để chứng minh — **XANH 2026-08-27**: `T18_Confidence_TuongQuanVoiDoChinhXac` (calibration binning qua 3.000 lượt kiểm chứng đơn điệu)
 
 ---
 
@@ -139,12 +144,12 @@ namespace Eleven.Keeper {
 ```
 
 **Checklist nghiệm thu**
-- [ ] Sau `Committed`, `targetCell` không đổi được — có test khẳng định điều này
-- [ ] `confidence` thấp → hoãn cam kết, ở lại `Reading` lâu hơn
-- [ ] `confidence` rất thấp và hết thời gian → chọn ở giữa, không bay bừa
-- [ ] Chuyển trạng thái ghi log được, tái hiện được từ seed
-- [ ] Chạy 500 lượt: không lượt nào thủ môn cản được cú sút mà `ReachEnvelope.CanReach` nói là không thể
-- [ ] Không dùng `Coroutine` — máy trạng thái thuần, chạy được ngoài Unity
+- [x] Sau `Committed`, `targetCell` không đổi được — có test khẳng định điều này — **XANH 2026-08-27**: `AfterCommitted_TargetCell_DoesNotChange`
+- [x] `confidence` thấp → hoãn cam kết, ở lại `Reading` lâu hơn — **XANH 2026-08-27**: `LowConfidence_WithTimeRemaining_StaysReading`
+- [x] `confidence` rất thấp và hết thời gian → chọn ở giữa, không bay bừa — **XANH 2026-08-27**: `VeryLowConfidence_OutOfTime_ChoosesCenter` (targetCell = 4, isFullDive = false)
+- [x] Chuyển trạng thái ghi log được, tái hiện được từ seed — **XANH 2026-08-27**: `Deterministic_SameInput_SameOutput`
+- [x] Chạy 500 lượt: không lượt nào thủ môn cản được cú sút mà `ReachEnvelope.CanReach` nói là không thể — **XANH 2026-08-27**: `FiveHundredTrials_CommitLogicConsistent`
+- [x] Không dùng `Coroutine` — máy trạng thái thuần, chạy được ngoài Unity — **XANH 2026-08-27**: `NoCoroutine_PureStateMachineTransitions` (kiểm chứng trọn vòng đời Set → Reading → Committed → Diving → Recovering → Set)
 
 ---
 
@@ -166,12 +171,12 @@ namespace Eleven.Keeper {
 ```
 
 **Checklist nghiệm thu**
-- [ ] Cú gần đây có trọng số cao hơn cú cũ — kiểm bằng hệ số suy giảm
-- [ ] Lịch sử rỗng cho prior đều tuyệt đối
-- [ ] Prior cộng lại bằng 1 trong mọi trường hợp
-- [ ] `memoryWeight = 0` làm hệ thống này vô hiệu hoàn toàn
-- [ ] Lịch sử lưu qua các lượt trong cùng loạt luân lưu, xoá khi sang trận mới
-- [ ] Không cấp phát — dùng `FixedList`, không dùng `List<T>`
+- [x] Cú gần đây có trọng số cao hơn cú cũ — kiểm bằng hệ số suy giảm — **XANH 2026-08-27**: `T20_CuGanDay_TrongSoCaoHon`
+- [x] Lịch sử rỗng cho prior đều tuyệt đối — **XANH 2026-08-27**: `T20_LichSuRong_PriorDeuTuyetDoi`
+- [x] Prior cộng lại bằng 1 trong mọi trường hợp — **XANH 2026-08-27**: `T20_PriorCongBang1_MoiTruongHop` (50 cấu hình ngẫu nhiên)
+- [x] `memoryWeight = 0` làm hệ thống này vô hiệu hoàn toàn — **XANH 2026-08-27**: `T20_MemoryWeight0_VoHieu`
+- [x] Lịch sử lưu qua các lượt trong cùng loạt luân lưu, xoá khi sang trận mới — **XANH 2026-08-27**: `T20_LuuQuaCacLuot`, `T20_Clear_XoaSach`, `T20_ToiDa20Cu_XoaCuCuNhat`
+- [x] Không cấp phát — dùng `FixedList`, không dùng `List<T>` — **XANH 2026-08-27**: `T20_FixedList_KhongCapPhat` (kiểm chứng qua `Is.Not.AllocatingGCMemory()`)
 
 ---
 

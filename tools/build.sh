@@ -23,16 +23,39 @@ done
 PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PROJECT_ROOT"
 
-# Tìm Unity: ưu tiên UNITY_PATH, sau đó bản 6000.3 mới nhất trong Unity Hub.
+# Tìm Unity: ưu tiên UNITY_PATH, sau đó ĐÚNG bản ghi trong ProjectVersion.txt.
+#
+# TUYỆT ĐỐI KHÔNG lấy "bản mới nhất đã cài" (`sort -V | tail -1`) như bản đầu tiên của script
+# này làm. Sự cố 2026-08-27: máy có thêm 6000.5.9f1, script chọn nó, và Unity lặng lẽ NÂNG CẤP
+# cả dự án — URP 17.3→17.5, collections 2.6.8→6.5.0, mathematics 1.3.3→1.4.0, ugui 2.0→2.5,
+# gỡ com.unity.modules.vr, thêm modules.physicscore2d, ghi đè manifest.json + packages-lock.json
+# và sinh ProjectSettings/PhysicsCoreProjectSettings2D.asset. Không có một dòng cảnh báo nào;
+# chỉ lộ ra vì có người đọc `git status`. Một lệnh build không bao giờ được phép đổi phiên bản
+# engine của dự án.
 UNITY_BIN="${UNITY_PATH:-}"
 if [[ -z "$UNITY_BIN" ]]; then
-    UNITY_BIN="$(ls -d /Applications/Unity/Hub/Editor/*/Unity.app/Contents/MacOS/Unity 2>/dev/null | sort -V | tail -1 || true)"
+    PROJECT_VERSION="$(sed -n 's/^m_EditorVersion: *//p' ProjectSettings/ProjectVersion.txt 2>/dev/null | head -1 | tr -d '\r')"
+    if [[ -z "$PROJECT_VERSION" ]]; then
+        echo "LỖI: Không đọc được m_EditorVersion từ ProjectSettings/ProjectVersion.txt." >&2
+        exit 3
+    fi
+    UNITY_BIN="/Applications/Unity/Hub/Editor/$PROJECT_VERSION/Unity.app/Contents/MacOS/Unity"
+    if [[ ! -x "$UNITY_BIN" ]]; then
+        echo "LỖI: Dự án cần Unity $PROJECT_VERSION nhưng không thấy ở $UNITY_BIN." >&2
+        echo "      Cài đúng bản đó qua Unity Hub. Đã cài sẵn những bản này:" >&2
+        ls -1 /Applications/Unity/Hub/Editor/ 2>/dev/null | sed 's/^/        /' >&2 || true
+        echo "      (Nếu cố ý build bằng bản khác thì đặt UNITY_PATH — và biết rằng nó sẽ" >&2
+        echo "       nâng cấp package của dự án.)" >&2
+        exit 3
+    fi
+    echo "Unity: $UNITY_BIN (khớp ProjectVersion.txt = $PROJECT_VERSION)"
+else
+    echo "Unity: $UNITY_BIN (từ UNITY_PATH — không kiểm tra khớp ProjectVersion.txt)"
 fi
-if [[ -z "$UNITY_BIN" || ! -x "$UNITY_BIN" ]]; then
-    echo "LỖI: Không tìm thấy Unity. Cài qua Unity Hub (bản 6000.3) hoặc đặt UNITY_PATH." >&2
+if [[ ! -x "$UNITY_BIN" ]]; then
+    echo "LỖI: UNITY_PATH trỏ tới thứ không chạy được: $UNITY_BIN" >&2
     exit 3
 fi
-echo "Unity: $UNITY_BIN"
 
 LOG_FILE="build_${TARGET}_$(date +%Y%m%d_%H%M%S).log"
 ARGS=(-batchmode -nographics -quit

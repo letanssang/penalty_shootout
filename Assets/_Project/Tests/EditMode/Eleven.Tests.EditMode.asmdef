@@ -12,6 +12,7 @@
         "UnityEditor.TestRunner",
         "Unity.Mathematics",
         "Unity.Collections",
+        "Unity.Burst",
         "Unity.RenderPipelines.Universal.Runtime"
     ],
     "includePlatforms": [
