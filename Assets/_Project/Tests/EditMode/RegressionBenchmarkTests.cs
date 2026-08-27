@@ -150,16 +150,18 @@ namespace Eleven.Tests.EditMode
                 BenchmarkSuite.GenerateStandard20Replays()[0]
             };
 
-            // Warm-up JIT
-            BenchmarkRunner.RunSuite(singleKickList, "warmup");
-
-            Assert.That(() =>
+            TestDelegate action = () =>
             {
                 for (int i = 0; i < 5; i++)
                 {
                     BenchmarkRunner.RunSuite(singleKickList, "test_gc");
                 }
-            }, Is.Not.AllocatingGCMemory());
+            };
+
+            // Warm-up JIT
+            action();
+
+            Assert.That(action, Is.Not.AllocatingGCMemory());
         }
     }
 }
