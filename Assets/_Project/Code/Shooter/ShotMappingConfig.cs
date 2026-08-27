@@ -69,9 +69,18 @@ namespace Eleven.Shooter {
                  "Phải nhỏ hơn hẳn insideFootMinCurvatureCm để hai vùng không đụng nhau.")]
         public float knuckleMaxCurvatureCm = 0.05f;
 
-        [Tooltip("0..1. |end-start| / độ dài cung. Chặn cú vuốt ngoằn ngoèo mà tình cờ\n" +
+        [Tooltip("0..1. So với SwipeFeatures.straightnessSmooth (đo trên đường ĐÃ LÀM MƯỢT,\n" +
+                 "không phải straightness thô). Chặn cú vuốt ngoằn ngoèo mà tình cờ\n" +
                  "có độ cong tổng ≈ 0 vì hai bướu trái/phải triệt tiêu nhau.")]
-        public float knuckleMinStraightness = 0.985f;
+        // 0.97 không phải số chọn đại. Đo trên cú vuốt 7.5 cm / 25 mẫu, straightnessSmooth:
+        //     tay run 13 px (mức tệ nhất còn thực tế) -> 0.979   PHẢI CHẤP NHẬN
+        //     cố ý vuốt chữ S biên độ 0.5 cm          -> 0.961   PHẢI TỪ CHỐI
+        // nên ngưỡng hợp lệ nằm trong khoảng (0.961, 0.979]; 0.97 là giữa khoảng đó.
+        // Giá trị cũ 0.985 lấy trên straightness THÔ và đó là lỗi: chỉ cần tay run 5 px thì
+        // độ thẳng thô đã tụt còn 0.970, tức cú knuckle nằm ngoài tầm với của gần như mọi
+        // người chơi — trong khi checklist T14 đòi cả 4 ShotType đều đạt tới được bằng cử chỉ.
+        // Cửa sổ này hẹp; nếu sau này chỉnh, chỉnh kèm KnuckleReachabilityTests bên EditMode.
+        public float knuckleMinStraightness = 0.97f;
 
         [Tooltip("0..1, so với tốc độ đã chuẩn hoá. Knuckle chỉ ra khi vuốt MẠNH —\n" +
                  "cú nhẹ mà thẳng vẫn là mu bàn chân.")]

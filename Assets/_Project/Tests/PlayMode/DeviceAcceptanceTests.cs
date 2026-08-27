@@ -6,6 +6,7 @@ using NUnit.Framework;
 using Unity.Collections;
 using Unity.Mathematics;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using UnityEngine.TestTools;
 
 namespace Eleven.Tests.PlayMode
@@ -91,7 +92,14 @@ namespace Eleven.Tests.PlayMode
                 Debug.Log($"[T08 THIET BI] TrajectoryPredictor.Predict 0.5s: {msPerPredict * 1000.0:F1}us ({msPerPredict:F5}ms) " +
                           $"qua {iters} lan do — yeu cau < 0.05ms");
 
-                Assert.Less(msPerPredict, 0.05, "Dự đoán 0.5s ở dt 1/120 phải mất dưới 0.05ms trên thiết bị thật");
+                if (Application.isEditor)
+                {
+                    Assert.Less(msPerPredict, 0.15, "Trong Editor (không có Burst AOT), dự đoán 0.5s phải dưới 0.15ms");
+                }
+                else
+                {
+                    Assert.Less(msPerPredict, 0.05, "Dự đoán 0.5s ở dt 1/120 phải mất dưới 0.05ms trên thiết bị thật");
+                }
             }
             finally
             {
@@ -146,17 +154,37 @@ namespace Eleven.Tests.PlayMode
 
         // ─── T03: phân bậc theo năng lực thật của máy ───
 
-        [Test]
-        public void T03_DeviceTier_PhatHienTrenPhanCungThat()
+        /// <summary>
+        /// Test này phải TỰ nạp scene Boot, không được ngồi chờ ai đó nạp hộ.
+        ///
+        /// Bản đầu chỉ khẳng định `DeviceTier.CurrentProfile != null` với lời nhắn "TierBootstrap
+        /// trong scene Boot phải đã gọi Initialize" — nhưng không chỗ nào nạp scene Boot cả. Test
+        /// runner của Unity khởi động ở scene runner của chính nó, KHÔNG phải scene 0 của build.
+        /// Đúng ở cả Editor lẫn player `-testPlatform Android`: nên ô này đỏ ở mọi nơi, không phải
+        /// "đỏ vì chưa chạy trên máy thật". Nạp Boot rồi mới hỏi là cách duy nhất để câu khẳng định
+        /// nói đúng thứ nó tự nhận đang kiểm: dây nối trong scene Boot có thật sự chạy hay không.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator T03_DeviceTier_PhatHienTrenPhanCungThat()
         {
+            yield return SceneManager.LoadSceneAsync("Boot", LoadSceneMode.Single);
+            yield return null; // để Awake của TierBootstrap chạy xong
+
             var tier = DeviceTier.Detect();
             Debug.Log($"[T03 THIET BI] tier={tier} model={SystemInfo.deviceModel} " +
                       $"RAM={SystemInfo.systemMemorySize}MB VRAM={SystemInfo.graphicsMemorySize}MB " +
                       $"cores={SystemInfo.processorCount} gfx={SystemInfo.graphicsDeviceType}");
 
             Assert.That(tier, Is.EqualTo(QualityTier.A).Or.EqualTo(QualityTier.B).Or.EqualTo(QualityTier.C));
+
+            // Chứng minh scene Boot thật sự có TierBootstrap — nếu ai đó xoá nó khỏi scene, ta muốn
+            // đỏ ở ĐÂY với lời nhắn rõ ràng, chứ không phải đỏ ở dòng CurrentProfile bên dưới rồi
+            // ngồi đoán xem null vì chưa nạp scene hay vì scene thiếu component.
+            Assert.NotNull(Object.FindFirstObjectByType<TierBootstrap>(),
+                "Scene Boot phải có đúng một TierBootstrap — chạy Eleven > Phase 0 > Generate Boot Scene.");
+
             Assert.NotNull(DeviceTier.CurrentProfile,
-                "TierBootstrap trong scene Boot phải đã gọi Initialize — CurrentProfile không được null trên máy thật");
+                "TierBootstrap trong scene Boot phải đã gọi Initialize — CurrentProfile không được null");
             Assert.AreEqual(tier, DeviceTier.CurrentProfile.tier,
                 "Profile đang dùng phải đúng là profile của bậc phát hiện được");
         }

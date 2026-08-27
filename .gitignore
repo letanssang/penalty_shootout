@@ -59,4 +59,5 @@ tests*.log
 results.xml
 devtests.log
 device-results.xml
-.utmp/
+# Stevedore cache config
+Stevedore.conf

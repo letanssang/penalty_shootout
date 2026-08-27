@@ -7,10 +7,20 @@ using Is = UnityEngine.TestTools.Constraints.Is;
 
 namespace Eleven.Tests.EditMode
 {
-    // GHI CHÚ: Mục "Dự đoán 0.5s ở dt 1/120 mất dưới 0.05ms" KHÔNG kiểm được đáng tin
-    // trong EditMode — timing ở Editor không phản ánh Burst AOT trên thiết bị (xem
-    // cảnh báo tương tự trong PerfHud.Sampler). CẦN NGƯỜI KIỂM đo lại bằng
-    // PerfHud.BeginCapture trên build thật.
+    // GHI CHÚ về mục "Dự đoán 0.5s ở dt 1/120 mất dưới 0.05ms".
+    //
+    // Con số 0.05ms TRÊN THIẾT BỊ thì đúng là phải đo trên thiết bị, và không có mẹo nào
+    // lách được: máy Mac chạy Editor và điện thoại chạy Burst AOT lệch nhau theo HAI chiều
+    // ngược nhau — Editor (Mono, không AOT) chậm hơn, nhưng CPU Mac lại nhanh hơn CPU điện
+    // thoại rất nhiều. Hai hiệu ứng đó không triệt tiêu nhau theo một hướng biết trước, nên
+    // "nhanh trên Mac" KHÔNG suy ra "nhanh trên máy" và ngược lại. Đây là lý do đúng, khác
+    // với ghi chú cũ chỉ nói chung chung "timing ở Editor không phản ánh Burst AOT".
+    //
+    // Nhưng phần LỚN rủi ro thì kiểm được tự động, vì thứ hay làm hỏng perf không phải là
+    // hằng số nhân của CPU mà là KHỐI LƯỢNG CÔNG VIỆC: ai đó thêm sub-step, đổi vòng lặp
+    // thành O(n²), hay cấp phát trong vòng. Cả ba đều lộ ra ở số bước, và số bước thì tất
+    // định trên mọi máy. Xem Predict_NuaGiay_Dung61Mau_SoBuocLaTatDinh bên dưới.
+    // Phần còn lại cho người đo: đúng MỘT con số trên build thật.
 
     [TestFixture]
     public class TrajectoryPredictorTests
@@ -168,6 +178,56 @@ namespace Eleven.Tests.EditMode
             using var emptyBuffer = new NativeArray<TrajectorySample>(0, Allocator.Temp);
             Assert.AreEqual(0, TrajectoryPredictor.Predict(s, p, dt: 1f / 120f, maxTime: 1f, emptyBuffer),
                 "Buffer rỗng phải trả 0, không index ngoài biên");
+        }
+
+        // ─── 7. Khối lượng công việc của kịch bản perf là tất định ───
+
+        /// <summary>
+        /// Chốt cứng SỐ BƯỚC của đúng kịch bản trong ô nghiệm thu perf (0.5s ở dt 1/120).
+        ///
+        /// Đây là nửa kiểm được của ô đó. Nếu ai sửa Predict thành chạy sub-step cho ổn định
+        /// hơn, hay đổi điều kiện dừng, thời gian chạy sẽ nhân lên tương ứng — và test này đỏ
+        /// ngay trên máy build, không phải đợi có người cầm điện thoại đo lại. Ngược lại, khi
+        /// test này xanh thì con số đo trên thiết bị hôm nay vẫn còn giá trị cho ngày mai:
+        /// cùng số bước, cùng khối lượng việc.
+        /// </summary>
+        [Test]
+        public void Predict_NuaGiay_Dung61Mau_SoBuocLaTatDinh()
+        {
+            var p = BallParams.Default;
+            var s = new BallState
+            {
+                position = float3.zero,
+                velocity = new float3(3f, 8f, 28f),
+                spin = new float3(10f, -20f, 5f)
+            };
+            const float dt = 1f / 120f;
+            const float maxTime = 0.5f;
+
+            using var buffer = new NativeArray<TrajectorySample>(256, Allocator.Temp);
+            int written = TrajectoryPredictor.Predict(s, p, dt, maxTime, buffer);
+
+            // 0.5s / (1/120) = 60 bước tích phân, cộng mẫu ở t = 0 là 61 mẫu.
+            Assert.AreEqual(61, written,
+                $"Kịch bản perf phải là đúng 61 mẫu (60 bước + mẫu gốc), đang là {written}. " +
+                "Số bước đổi nghĩa là khối lượng việc đổi — con số 0.05ms đo trên thiết bị " +
+                "không còn nói về cùng một phép tính nữa.");
+
+            // Đo và IN RA, không assert ngưỡng tuyệt đối: xem ghi chú đầu file về việc vì sao
+            // ngưỡng ms trên máy này không nói được gì về máy kia. Con số dưới đây chỉ để đối
+            // chiếu tương đối giữa hai lần chạy trên CÙNG một máy.
+            for (int i = 0; i < 50; i++) TrajectoryPredictor.Predict(s, p, dt, maxTime, buffer); // làm nóng JIT
+
+            const int soLan = 2000;
+            var dongHo = System.Diagnostics.Stopwatch.StartNew();
+            for (int i = 0; i < soLan; i++) TrajectoryPredictor.Predict(s, p, dt, maxTime, buffer);
+            dongHo.Stop();
+
+            double msMoiLan = dongHo.Elapsed.TotalMilliseconds / soLan;
+            TestContext.WriteLine(
+                $"[T08 THAM CHIEU] Predict(0.5s, dt=1/120) = {written} mẫu, " +
+                $"{msMoiLan:F4} ms/lần trong Editor trên máy này ({soLan} lần đo). " +
+                "Ngưỡng nghiệm thu 0.05 ms là ngưỡng TRÊN THIẾT BỊ — con số này không thay thế nó.");
         }
     }
 }

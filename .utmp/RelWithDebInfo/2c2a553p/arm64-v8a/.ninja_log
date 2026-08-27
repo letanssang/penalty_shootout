@@ -1,0 +1,12 @@
+# ninja log v5
+7	234	1787626898903173542	FramePacing/CMakeFiles/swappywrapper.dir/UnitySwappyWrapper.cpp.o	e92493ebed8479e8
+235	447	1787626899070563865	/Users/tansangle/Projects/penalty_shootout/Library/Bee/Android/Prj/IL2CPP/Gradle/unityLibrary/build/intermediates/cxx/RelWithDebInfo/2c2a553p/obj/arm64-v8a/libswappywrapper.so	20c755c656cf51cb
+2	1335	1787626899990684123	GameActivity/CMakeFiles/game.dir/UGAInputKeyEvent.cpp.o	1d5dfdde95ad1be
+1	1343	1787626900000796715	GameActivity/CMakeFiles/game.dir/UGAEntry.cpp.o	ccd454583d1fe097
+0	1367	1787626900033460065	GameActivity/CMakeFiles/game.dir/UGAConfiguration.cpp.o	90873f1ce0ea100a
+4	1376	1787626900041797496	GameActivity/CMakeFiles/game.dir/UGAInputMotionEvent.cpp.o	d46c3d9cb5125853
+1	1383	1787626900049781136	GameActivity/CMakeFiles/game.dir/UGADebug.cpp.o	fa92d3789c29001d
+5	1456	1787626900123750809	GameActivity/CMakeFiles/game.dir/UGASoftKeyboard.cpp.o	be69e3a49e864ed3
+1	1539	1787626900205194124	GameActivity/CMakeFiles/game.dir/UGAInput.cpp.o	c5c3531a373f5c9f
+0	1574	1787626900241982378	GameActivity/CMakeFiles/game.dir/UGAApplication.cpp.o	46b71b73800776e9
+1574	1644	1787626900310502985	/Users/tansangle/Projects/penalty_shootout/Library/Bee/Android/Prj/IL2CPP/Gradle/unityLibrary/build/intermediates/cxx/RelWithDebInfo/2c2a553p/obj/arm64-v8a/libgame.so	a6863c94a4c025e3

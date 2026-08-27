@@ -17,6 +17,7 @@ làm cho nó **chỉnh được**, đừng làm cho nó hoàn hảo.
 > `SwipeSmoothingTests` 9 · `SwipeCollectorTests` 7 · `AimProjectorTests` 8 · `PhysicalUnitsTests` 2(+13 case).
 >
 > **4 điểm HỢP ĐỒNG BỊ DIỄN GIẢI RỘNG HƠN BẢN GỐC — cần biết trước khi đọc checklist:**
+>
 > 1. `ShotMapper.Map` có thêm tham số `float3 aimPoint` so với chữ ký trong tài liệu này. Bắt buộc:
 >    hợp đồng gốc không có đường nào để điểm ngắm đi vào, mà ghi chú camera ngay dưới đây lại yêu cầu
 >    ShotMapper KHÔNG được tự đọc camera. Phép chiếu nằm riêng ở
@@ -43,7 +44,8 @@ namespace Eleven.Shooter {
     public float2 start, end;
     public float  length, duration, peakSpeed, endSpeed;
     public float  curvature;      // có dấu, dương = cong sang phải
-    public float  straightness;   // 0..1, 1 = thẳng tuyệt đối
+    public float  straightness;   // 0..1, đo trên mẫu THÔ
+    public float  straightnessSmooth; // 0..1, đo trên đường ĐÃ LÀM MƯỢT — xem T14
     public float  verticalRatio;  // dùng để nhận diện cú chip
   }
 
@@ -58,7 +60,7 @@ namespace Eleven.Shooter {
 > **ĐÃ CHẠY TEST SỐNG 2026-08-26 (lần chạy buổi sáng)** — không còn là đọc code tĩnh nữa.
 > Lệnh: `Unity 6000.3.22f1 -batchmode -nographics -runTests -testPlatform EditMode`.
 > Kết quả toàn dự án lúc đó: **141/141 xanh, 0 đỏ, 0 bỏ qua** (79.5 s).
-> *(Lần chạy buổi chiều cùng ngày, sau khi có T14/T15: **235/235 xanh** — xem đầu trang.)*
+> _(Lần chạy buổi chiều cùng ngày, sau khi có T14/T15: **235/235 xanh** — xem đầu trang.)_
 >
 > Trước lần chạy này **toàn bộ EditMode suite chưa từng biên dịch được** — 3 lỗi CS trong
 > `ParameterFitterTests.cs` (thiếu `using System;` cho `FormattableString`) và
@@ -73,7 +75,23 @@ namespace Eleven.Shooter {
 - [x] Lấy mẫu độc lập với tốc độ khung hình — 30fps và 60fps cho `curvature` chênh dưới 5% — **XANH 2026-08-26**: `FrameRateIndependence_CurvatureDiffersUnderFivePercent` + `FrameRateIndependence_PeakSpeedSimilar`
 - [x] `curvature` tính bằng diện tích có dấu giữa đường vuốt và dây cung, chuẩn hoá theo độ dài — **XANH 2026-08-26**: `ArcToTheRight_CurvaturePositive`, `ArcToTheLeft_CurvatureNegative`, `ClearArc_CurvatureSignificantlyNonZero`, `LengthIsArcLengthNotChordDistance`, `Semicircle_LengthMatchesHalfCircumference`
 - [x] Vuốt thẳng cho `curvature` gần 0 và `straightness` gần 1 — **XANH 2026-08-26**: `StraightLine_CurvatureNearZero_StraightnessNearOne`
-- [x] Lọc nhiễu ngón tay bằng làm mượt, nhưng không làm mất độ cong thật — **XANH 2026-08-26 (chạy sống)**: gap "thiếu test TRỰC TIẾP" đã lấp bằng [SwipeSmoothingTests.cs](../../Assets/_Project/Tests/EditMode/SwipeSmoothingTests.cs) — 9 test dựng CÙNG một cú vuốt hai lần (sạch / cộng nhiễu) rồi so hai kết quả với nhau, không có con số kỳ vọng viết cứng nào. Nhiễu dùng là **răng cưa** (mẫu chẵn +A, mẫu lẻ −A) tức trường hợp xấu nhất, biên độ quy từ pixel thật trên máy 326 ppi: 3 px (rung cảm ứng thường) và 13 px (tay run). Kết quả: độ cong lệch dưới 8% ở mức tay run và dưới 2% ở mức thường (`LamMuot_GiuDuocDoCong_KhiCoNhieu`, `NhieuMucThuong_GanNhuKhongAnhHuongDoCong`), dấu độ cong không bao giờ đảo (`LamMuot_GiuDauDoCong_KhiCoNhieu`), suy giảm đơn điệu theo biên độ nhiễu nên không có cộng hưởng với chu kỳ răng cưa (`NhieuCangManh_DoCongCangIt_BiKeoLech`), và đường THẲNG có nhiễu không sinh nổi độ cong giả vượt ngưỡng knuckle (`DuongThangCoNhieu_KhongSinhDoCongGiaVuotNguongKnuckle` — kiểm thẳng hệ quả gameplay, không kiểm bằng một con số trừu tượng). Hai test khoá hợp đồng ngược lại: `length`/`peakSpeed`/`straightness` CỐ Ý đo trên mẫu thô, và hai đầu mút không bao giờ bị làm mượt (nếu không thì ngắm lệch). **Còn nợ, thuộc về nghiệm thu trên máy thật (T33/T34), không phải việc code:** chưa có dữ liệu vuốt của ngón tay THẬT — mọi nhiễu ở đây là tổng hợp.
+- [x] Lọc nhiễu ngón tay bằng làm mượt, nhưng không làm mất độ cong thật — **XANH 2026-08-26**: [SwipeSmoothingTests.cs](../../Assets/_Project/Tests/EditMode/SwipeSmoothingTests.cs), 9 test dựng CÙNG một cú vuốt hai lần (sạch / có nhiễu) rồi so hai kết quả với nhau, không có số kỳ vọng nào viết cứng.
+      Việc viết bộ test này **làm lộ hai lỗi thật trong `SwipeAnalyzer`, cả hai đã sửa**:
+  1. `curvature = signedArea / len` trộn hai thước đo: `signedArea` tích phân trên đường ĐÃ LÀM MƯỢT còn `len` là chiều dài cung THÔ. Tay càng run thì `len` càng phình, độ cong càng bị báo thiếu — người chơi tay run vuốt cong bị ăn mất xoáy. Sửa: chia cho `smoothLen`.
+  2. Hai đầu mút không hề được làm mượt (giữ nguyên giá trị thô), mà `curvature` đo độ lệch so với dây cung `start→end`, nên nhiễu vuông góc của **mẫu đầu tiên** chui thẳng vào kết quả theo tỉ lệ 1:1. Sửa: đầu mút lấy từ hồi quy tuyến tính 3 điểm rồi ngoại suy về đúng vị trí đầu, `v = (5·p0 + 2·p1 − p2)/6`.
+
+  Số đo trước/sau, cú vuốt 6 cm 25 mẫu, nhiễu răng cưa (trường hợp xấu nhất):
+
+  | biên độ nhiễu      | độ cong sai lệch TRƯỚC | SAU   | độ cong GIẢ trên đường thẳng TRƯỚC → SAU |
+  | ------------------ | ---------------------- | ----- | ---------------------------------------- |
+  | 3 px (rung thường) | −3.2%                  | −1.0% | 0.022 → 0.007 cm                         |
+  | 13 px (tay run)    | −13.9%                 | −4.2% | 0.094 → 0.031 cm                         |
+  | 26 px (cực đoan)   | −27.9%                 | −7.9% | 0.189 → 0.062 cm                         |
+
+  Cố ý **không** dùng trung bình 2 điểm `(p0+p1)/2` ở đầu mút dù nó khử nhiễu răng cưa tốt hơn hẳn: nó dịch đầu mút vào trong nửa đoạn nên độ cong đo được phụ thuộc mật độ lấy mẫu (lệch 10.6% giữa 12 và 25 mẫu) — máy 60 Hz và 120 Hz sẽ cho cảm giác sút khác nhau. Cách đang dùng giữ lệch thưa/dày ở 3.0% và giữ nguyên thang đo (0.6192 so với 0.6196), nên **không phải hiệu chỉnh lại `ShotMappingConfig`**.
+
+  Còn nợ: chưa có test với nhiễu ngón tay THẬT ghi từ máy thật — nhiễu ở đây là tổng hợp. Đã đo thêm với nhiễu ngẫu nhiên (hiền hơn răng cưa khoảng 2 lần) nên qua răng cưa là qua cả kia.
+
 - [x] Vuốt dưới 3 mẫu bị từ chối, không làm crash — **XANH 2026-08-26**: `ZeroSamples_DoesNotCrash_AllZeros`, `OneSample_DoesNotCrash_StartEqualsEnd`, `TwoSamples_DoesNotCrash_StartEndCorrect_NoCrashFeatures`, `DegenerateAllSamePoint_NoNaNs`, và ở lớp thu: `End_WithLessThanThreeSamples_ReturnsTooFewSamples`
 - [x] Chuẩn hoá theo DPI — cùng cử chỉ vật lý trên iPhone SE và iPad cho kết quả gần nhau — **XANH 2026-08-26**: `PhysicalInvariance_SamePhysicalSwipeOnDifferentDevices_YieldsIdenticalFeatures` dựng cùng một cung cong 4cm trên hai máy giả lập 326ppi/264ppi, `length` chênh dưới 1%. Hiện thực: [PhysicalUnits.cs](../../Assets/_Project/Code/Shooter/PhysicalUnits.cs) (toán thuần tách khỏi `Screen` để test được, DPI hỏng → dự phòng 290, kẹp [100,700]) + [SwipeCollector.cs](../../Assets/_Project/Code/Shooter/SwipeCollector.cs) (chốt hệ số k một lần mỗi vuốt, `NativeArray` cấp phát một lần tái dùng). Còn nợ: lớp input phía trên chưa tồn tại — xem `FlipYToBottomLeft` và hợp đồng gốc toạ độ trong `SwipeCollector.Begin`
 
@@ -109,20 +127,52 @@ namespace Eleven.Shooter {
   }
 
   public static class ShotMapper {
-    public static ShotIntent Map(in SwipeFeatures f, ShotMappingConfig cfg,
-                                 float timingError, uint seed);
+    // aimPoint do AimProjector tính sẵn; ShotMapper không được tự đọc Camera.
+    public static ShotIntent Map(in SwipeFeatures f, float3 aimPoint,
+                                 ShotMappingConfig cfg, float timingError, uint seed);
   }
 }
 ```
 
-**Checklist nghiệm thu** — **25 test trong [ShotMapperTests.cs](../../Assets/_Project/Tests/EditMode/ShotMapperTests.cs), TẤT CẢ XANH 2026-08-26 (chạy sống)**
+**Checklist nghiệm thu** — **25 test trong [ShotMapperTests.cs](../../Assets/_Project/Tests/EditMode/ShotMapperTests.cs) + 6 test trong [KnuckleReachabilityTests.cs](../../Assets/_Project/Tests/EditMode/KnuckleReachabilityTests.cs), TẤT CẢ XANH 2026-08-26 (chạy sống)**
 
 - [x] Không có hằng số ma thuật trong `ShotMapper` — mọi số đến từ config — hằng số duy nhất còn lại trong file là `Epsilon = 1e-6f` để chặn chia cho 0, không phải số chỉnh tay. Không tự nhận suông: 4 test đổi config rồi kiểm kết quả đổi theo — `DoiMaxSpeed_KetQuaDoiTheo`, `DoiMaxSpin_KetQuaDoiTheo`, `DoiNguongNhanDangLop_KetQuaDoiTheo`, `DoiNguongCongMaTrong_KetQuaDoiTheo`. Số nào bị chôn cứng trong code thì 4 test này đỏ.
 - [x] Cùng `seed` và cùng input cho ra `ShotIntent` giống hệt — `CungSeedCungInput_ChoShotIntentGiongHet`; `SeedKhac_ChoTanMatKhac_NhungKhongDoiTocDoLoaiVaXoay` khoá thêm một điều quan trọng: seed CHỈ được đụng vào tản mát, không được đụng tốc độ/loại/xoáy. `Seed0_VanChayDuoc` (dùng `Random.CreateFromIndex` nên seed 0 không làm hỏng bộ sinh).
-- [x] Sai số thời điểm làm *lệch* cú sút chứ không làm hỏng hoàn toàn — kiểm bằng biểu đồ phân tán 200 cú — `PhanTan200Cu_LamLechChuKhongLamHong` chạy đúng 200 seed và kiểm cả hai chiều: có tản mát thật (không phải mọi cú đều trúng tâm) NHƯNG không cú nào bay ra ngoài vùng chấp nhận được. Kèm `SaiSoCangLon_TanMatCangRong_DonDieu` và `SaiSoVuotTran_QualityKepVeKhong_KhongAm`.
+- [x] Sai số thời điểm làm _lệch_ cú sút chứ không làm hỏng hoàn toàn — kiểm bằng biểu đồ phân tán 200 cú — `PhanTan200Cu_LamLechChuKhongLamHong` chạy đúng 200 seed và kiểm cả hai chiều: có tản mát thật (không phải mọi cú đều trúng tâm) NHƯNG không cú nào bay ra ngoài vùng chấp nhận được. Kèm `SaiSoCangLon_TanMatCangRong_DonDieu` và `SaiSoVuotTran_QualityKepVeKhong_KhongAm`.
 - [x] Vuốt hết biên độ cho tốc độ đúng `maxSpeed`, không vượt — `VuotHetBienDo_ChoDungMaxSpeed_KhongVuot`; và `DuongCongVongLenTrenMot_VanKhongLamTocDoVuotMaxSpeed` bịt lỗ thật: `AnimationCurve` vọt trên 1 khi ai đó kéo tiếp tuyến trong Inspector, không kẹp đầu ra thì lời hứa "không bao giờ vượt maxSpeed" vỡ vì một thao tác kéo chuột. `VuotCangDai_TocDoCangLon_KhongGiamNguoc` chặn đường cong bị kéo ngược.
 - [x] 4 `ShotType` đều đạt tới được bằng cử chỉ, không cần nút bấm — `BonLoaiSut_DeuDatToiDuocBangCuChi_KhongCanNutBam` dựng 4 cử chỉ và nhận đúng 4 loại. Hai test chặn nhầm lẫn: `GiatNganMaCham_KhongPhaiLop_MaLaCuSutNhe` (vuốt ngắn mà chậm không được thành lốp) và `VuotHinhChuS_KhongBiNhamThanhKnuckle` (hai bướu ngược chiều triệt tiêu nhau cho độ cong ≈ 0, nhưng đó rõ ràng không phải vuốt thẳng — đây là lý do tồn tại của `straightnessSmooth`).
 - [x] Cú `Knuckle` đặt `spin` gần 0 và bật cờ bất ổn định riêng, **không** giả lập bằng cách gán xoáy ngẫu nhiên — `Knuckle_XoayDungBangKhong_VaBatCoBatOnDinh` (xoáy đúng bằng 0, không phải "gần 0"), `Knuckle_KhongPhaiGiaLapBangXoayNgauNhien` (nhiều seed khác nhau vẫn cho xoáy 0 — nếu ai đó lén gán xoáy ngẫu nhiên thì test này đỏ), `CacLoaiKhac_KhongBatCoBatOnDinh`. Cờ `unstable` được T15 đọc. Kèm `VuotThang_XoayDungBangKhong_KhongPhaiSoHatTieu` và `XoayKhongBaoGioVuotMaxSpinRadPerSec`.
+
+> ### Lỗi đã vá khi kiểm lại ô "4 ShotType đều đạt tới được"
+>
+> Ô này thoạt tiên xanh, nhưng chỉ với ngón tay **lý tưởng**. Kiểm lại với ngón tay có run:
+>
+> `ShotMapper` phân loại `Knuckle` theo `straightness >= 0.985`, mà `straightness` cố ý đo trên
+> mẫu **thô**. Đo được: chỉ cần rung cảm ứng **5 px** là độ thẳng thô đã tụt còn 0.970 — cú
+> knuckle **biến khỏi tầm với của gần như mọi người chơi**, trong khi họ đang vuốt thẳng thật.
+> Tức là 1 trong 4 kiểu sút coi như không tồn tại.
+>
+> Tệ hơn, `straightness` thô **không phân biệt nổi** hai thứ khác hẳn nhau (cú vuốt 7.5 cm, 25 mẫu):
+>
+> | cú vuốt                | straightness THÔ | straightnessSmooth |
+> | ---------------------- | ---------------- | ------------------ |
+> | thẳng + tay run 13 px  | 0.839            | **0.979**          |
+> | cố ý lượn chữ S 1.0 cm | 0.865            | **0.870**          |
+>
+> Trên số liệu thô, cú vuốt **thẳng** của người tay run trông còn **kém thẳng hơn** cú ngoằn
+> ngoèo cố ý. Không có ngưỡng nào cứu được.
+>
+> **Cách sửa:** thêm `SwipeFeatures.straightnessSmooth` (đo trên đường đã làm mượt, tính từ
+> `chordLen / smoothLen` — cả hai số đã có sẵn trong hàm nên **không tốn thêm phép tính nào**),
+> và `ShotMapper` phân loại hình dáng cử chỉ bằng nó. `straightness` thô giữ nguyên, vì nó vẫn
+> đúng cho thứ nó đo: ngón tay đã thật sự đi loạng choạng cỡ nào.
+> `knuckleMinStraightness` hạ 0.985 → **0.97**, nằm giữa cửa sổ đo được `(0.961, 0.979]`.
+>
+> Cửa sổ đó **hẹp**, nên `KnuckleReachabilityTests` chốt cứng nó bằng chính số đo chứ không
+> bằng hằng số chép tay: nếu ai chỉnh ngưỡng ra ngoài, hoặc nếu cửa sổ đóng lại hẳn, test đỏ
+> chứ không im lặng. Cũng vá luôn một lỗ suy biến phát sinh: cú vuốt đi rồi vòng về đúng chỗ cũ
+> (dây cung ≈ 0 nhưng cung rất dài) sẽ cho `straightnessSmooth = 1` — "thẳng tuyệt đối" cho một
+> vòng tròn — nếu tính tắt bên trong nhánh bảo vệ `chordLen`.
 
 ---
 
@@ -205,6 +255,7 @@ namespace Eleven.Shooter {
 - [x] **Không NaN ở mọi biên** — `Knuckle_Bien_VanTocKhong`, `Knuckle_Bien_ConfigToanKhong`, `Knuckle_Bien_ElapsedRatLon`, `Knuckle_Bien_VanTocGanSongSongTrucY` (trục lệch suy biến → đổi trục phụ), `Knuckle_ElapsedAmHoacNaN_LucBangKhong`, `Knuckle_LucLuonVuongGocVoiVanToc`, `Knuckle_KhongCapPhat`; phía cửa sổ thời điểm: `ThoiDiemVoCuc_HoacNaN_KhongLamHongKetQua`, `ConfigSaiThuTu_DuocSapLai_KhongImLangSai`, `ChamThoiDiem_KhongCapPhat`.
 
 **Còn nợ ở T15 (không phải việc code, ghi ra để không quên):**
+
 - Nối `KnuckleForce` vào khâu thực thi cú sút: `BallDriver` hiện chưa cộng gia tốc knuckle vào mỗi bước sim, vì cờ `ShotIntent.unstable` mới chỉ được đặt chứ chưa có ai đọc. Việc nối nằm ở **T16** (khâu thực thi cú sút), đúng theo thứ tự phụ thuộc của backlog — T15 chỉ có nhiệm vụ cung cấp hàm thuần.
 - `TimingWindowConfig` mới chỉ có `Default` dựng bằng code; chưa có asset `ScriptableObject` để chỉnh trên máy thật. Cùng lý do như trên: chưa có UI cửa sổ thời điểm để chỉnh cho ai xem.
 - Ba con số cửa sổ (±50 / ±120 / trần 200 ms) là **giả thiết thiết kế, chưa qua user test**. Đúng tinh thần đầu trang: "làm cho nó chỉnh được, đừng làm cho nó hoàn hảo".
