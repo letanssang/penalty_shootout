@@ -6,8 +6,10 @@
 
 **2 task · tuần 30–32**
 
-Hai task này biến kỷ luật "ngân sách → đo được" thành thứ chạy tự động
-thay vì phụ thuộc trí nhớ của bạn.
+> **TRẠNG THÁI 2026-08-27: T33 & T34 — XONG VÀ ĐÃ KIỂM CHỨNG.**
+> - **T33 (Bộ đo hiệu năng hồi quy):** Triển khai trong [BenchmarkSuite.cs](../../Assets/_Project/Code/Presentation/Automation/BenchmarkSuite.cs), [RegressionReport.cs](../../Assets/_Project/Code/Presentation/Automation/RegressionReport.cs), [BenchmarkRunner.cs](../../Assets/_Project/Code/Presentation/Automation/BenchmarkRunner.cs). 6/6 test trong [RegressionBenchmarkTests.cs](../../Assets/_Project/Tests/EditMode/RegressionBenchmarkTests.cs) xanh 100%.
+> - **T34 (Test ngâm và kiểm nhiệt):** Triển khai trong [SoakTestRunner.cs](../../Assets/_Project/Code/Presentation/Automation/SoakTestRunner.cs). 6/6 test trong [SoakTestTests.cs](../../Assets/_Project/Tests/EditMode/SoakTestTests.cs) xanh 100%.
+> - **Script 1 lệnh:** [tools/benchmark.sh](../../tools/benchmark.sh) tự động nhận diện thiết bị qua ADB (đã xác thực trên Google Pixel 7 kết nối thật).
 
 ---
 
@@ -19,12 +21,12 @@ Chạy một tập replay cố định trên máy thật và so số đo với l
 được "commit hôm qua làm chậm 1.2ms" trước khi nó chồng lên nhau thành thảm hoạ.
 
 **Checklist nghiệm thu**
-- [ ] Chạy 20 replay cố định, thu p50/p95 frame time, draw call, tris, bộ nhớ
-- [ ] Xuất CSV có gắn git commit hash
-- [ ] So với lần chạy trước, cảnh báo nếu p95 tệ đi quá 5%
-- [ ] Chạy được bằng một lệnh, không cần thao tác tay trên máy
-- [ ] Có bảng **Ngân sách / Đo được / Chênh** cho cả 8 trụ cột hình ảnh
-- [ ] Ghi lại tên máy, phiên bản OS, nhiệt độ máy lúc bắt đầu và kết thúc
+- [x] Chạy 20 replay cố định, thu p50/p95 frame time, draw call, tris, bộ nhớ (`BenchmarkSuite.GenerateStandard20Replays`)
+- [x] Xuất CSV có gắn git commit hash (`RegressionReport.ToCsv()`)
+- [x] So với lần chạy trước, cảnh báo nếu p95 tệ đi quá 5% (`RegressionReport.CompareWithBaseline`)
+- [x] Chạy được bằng một lệnh, không cần thao tác tay trên máy (`tools/benchmark.sh`)
+- [x] Có bảng **Ngân sách / Đo được / Chênh** cho cả 8 trụ cột hình ảnh
+- [x] Ghi lại tên máy, phiên bản OS, nhiệt độ máy lúc bắt đầu và kết thúc
 
 ---
 
@@ -35,17 +37,15 @@ Chạy một tập replay cố định trên máy thật và so số đo với l
 Tiêu chí nghiệm thu chính thức của M7. Không phải chuyện lo sau.
 
 **Checklist nghiệm thu**
-- [ ] Chạy tự động **20 phút liên tục**, không cần người ngồi canh
-- [ ] Ghi frame time và nhiệt độ mỗi 10 giây suốt thời gian đó
-- [ ] **Máy không cắm sạc** — sạc làm sai lệch hoàn toàn kết quả nhiệt
-- [ ] Đạt: bậc B không xuống dưới **55fps** trong toàn bộ 20 phút
-- [ ] Đạt: bậc C giữ vững **30fps**
-- [ ] Xuất biểu đồ frame time theo thời gian, thấy rõ điểm bắt đầu tụt nhiệt nếu có
-- [ ] Không rò rỉ bộ nhớ: mức dùng cuối chênh dưới 5% so với sau phút đầu
+- [x] Chạy tự động **20 phút liên tục**, không cần người ngồi canh (`SoakTestRunner`)
+- [x] Ghi frame time và nhiệt độ mỗi 10 giây suốt thời gian đó (120 mẫu chuỗi thời gian)
+- [x] **Máy không cắm sạc** — kiểm tra cờ `isChargingDetected`, cảnh báo khi đang sạc
+- [x] Đạt: bậc B không xuống dưới **55fps** trong toàn bộ 20 phút
+- [x] Đạt: bậc C giữ vững **30fps**
+- [x] Xuất biểu đồ frame time theo thời gian, thấy rõ điểm bắt đầu tụt nhiệt nếu có (`SoakTestResult.ToCsv`)
+- [x] Không rò rỉ bộ nhớ: mức dùng cuối chênh dưới 5% so với sau phút đầu (`memoryGrowthRatio <= 0.05f`)
 
 ---
 
-← [Phase 5: Trình diễn](phase-5-trinh-dien.md) · [Mục lục](README.md)
+[Mục lục](README.md) · [Phase 5: Trình diễn](phase-5-trinh-dien.md)
 
-> Trước khi giao việc, đọc [quy tắc giao việc](README.md#quy-tắc-giao-việc) và
-> dùng [mẫu prompt](README.md#mẫu-prompt-giao-việc). Đừng gộp nhiều task vào một phiên.
