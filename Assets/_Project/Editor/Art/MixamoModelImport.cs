@@ -130,7 +130,13 @@ namespace Eleven.Editor.Tools
             // Mixamo đặt tên MỌI take là "mixamo.com". Để nguyên thì Animator hiện 23 clip
             // trùng tên và không ai chọn đúng được clip nào.
             var fileName = Path.GetFileNameWithoutExtension(assetPath);
-            var loop = fileName.Contains("Idle") || fileName == "JogForward";
+            // Chỉ bật loop cho clip ĐÃ ĐO là khép kín. Menu/Juggle* và Menu/Stall* có độ lệch
+            // tư thế đầu-cuối 0.0 cm (docs/data/menu-clip-probe.tsv) nên nối vòng không giật;
+            // JuggleKickUp lệch 20.5 cm nên là động tác vào, không nằm trong danh sách này.
+            var loop = fileName.Contains("Idle")
+                       || fileName == "JogForward"
+                       || fileName.StartsWith("JuggleKnee")
+                       || fileName.StartsWith("Stall");
 
             for (int i = 0; i < clips.Length; i++)
             {

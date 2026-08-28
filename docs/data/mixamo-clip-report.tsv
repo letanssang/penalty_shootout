@@ -22,6 +22,11 @@ KickSoccerball_B.fbx	KickSoccerball_B	0.500	60	30	True	True	False	0.000	0.000	co
 OffensiveIdle.fbx	OffensiveIdle	10.550	60	633	True	True	True	0.000	0.000	copied
 PenaltyKick.fbx	PenaltyKick	1.500	60	90	True	True	False	1.690	2.535	copied
 StrikeForwardJog.fbx	StrikeForwardJog	1.300	60	78	True	True	False	2.219	2.884	copied
+JuggleKickUp.fbx	JuggleKickUp	1.317	60	79	True	True	False	0.048	0.064	copied
+JuggleKnee_A.fbx	JuggleKnee_A	0.883	60	53	True	True	True	0.000	0.000	copied
+JuggleKnee_B.fbx	JuggleKnee_B	0.633	60	38	True	True	True	0.000	0.000	copied
+KeeperPlacingBall.fbx	KeeperPlacingBall	3.533	60	212	True	True	False	0.318	1.124	copied
+Stall_C.fbx	Stall_C	2.300	60	138	True	True	True	0.000	0.000	copied
 
 # Skeleton (XBot.fbx): 68 transform
 # Skin	2 SkinnedMeshRenderer, 28374 đỉnh — có mesh

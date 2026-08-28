@@ -8,7 +8,9 @@ phải mở lại 55 file mà đoán.
 
 ---
 
-## 1. Đã đưa vào 22 clip
+## 1. Đã đưa vào 22 clip cho gameplay
+
+(Thêm 5 clip cho màn hình chủ ở mục 6 — tổng 27.)
 
 Tất cả đều **60 fps**, **Humanoid**, `humanMotion = true` — nghĩa là retarget được sang
 model cầu thủ thật sau này mà không phải dựng lại Animator. Số đo đầy đủ nằm ở
@@ -158,9 +160,74 @@ năng phải bake cả Y ra ngoài và để gameplay dựng luôn quỹ đạo 
 
 ---
 
-## 6. Việc tiếp theo
+---
+
+## 6. Màn hình chủ — `Menu/` (5 clip)
+
+Câu hỏi ban đầu là "có clip nào tâng bóng cho màn hình chủ không". Có, nhưng gói không
+cho sẵn một vòng tâng bóng dài; nó cắt động tác thành từng chạm rời để game tự ghép.
+Đo bằng `Eleven > Art > Probe Menu Clips` (kết quả `docs/data/menu-clip-probe.tsv`),
+cột quan trọng là **seam** — độ lệch tư thế giữa khung đầu và khung cuối, quy về gốc hông.
+
+| Clip | Giây | Seam | Loop | Vai trò |
+|---|---|---|---|---|
+| `JuggleKickUp` | 1.317 | 20.5 cm | không | Hất bóng từ đất lên — động tác **vào**, chạy một lần |
+| `JuggleKnee_A` | 0.883 | 0.0 cm | có | Tâng gối, đùi lên gần ngang hông (−5.4 cm) |
+| `JuggleKnee_B` | 0.633 | 0.0 cm | có | Tâng gối cao hơn, đùi vượt trên hông (+4.8 cm) |
+| `Stall_C` | 2.300 | 0.0 cm | có | Giữ bóng trên đùi, đầu gối +24.7 cm — động tác **kết** |
+| `KeeperPlacingBall` | 3.533 | 11.6 cm | không | Đặt bóng lên chấm phạt đền |
+
+**Cách ghép:** `JuggleKickUp` → (`JuggleKnee_A` + `JuggleKnee_B`) lặp → `Stall_C`.
+Vòng lặp giữa dài 1.52 giây. Ghép được là vì seam của hai clip gối bằng 0.0 cm — cả gói
+được dựng để mọi clip về cùng một tư thế chuẩn, nên nối đuôi nhau không giật. Con số này
+đáng tin vì cùng phép đo cho `PenaltyKick` 65.4 cm và `KeeperMiss` 69.7 cm, đúng như kỳ
+vọng với clip một-lần: công cụ có phân biệt được, không phải lúc nào cũng trả 0.
+
+`KeeperPlacingBall` không thuộc vòng tâng bóng nhưng hợp đề tài hơn cả: một người đặt bóng
+lên chấm phạt đền là hình ảnh mở màn đúng nghĩa cho game sút luân lưu. Chạy một lần rồi
+hoà vào `OffensiveIdle`.
+
+Nếu cần thêm thủ môn đứng nền cho cảnh menu thì **dùng lại `Keeper/KeeperIdle_A`** (4.617 s,
+seam 0.0 cm) — không phải tải thêm gì.
+
+### Cái bẫy: Mixamo không kèm quả bóng
+
+Chữ "soccerball" trong tên clip chỉ tả **động tác**, không có mesh bóng nào trong file.
+Dựng thẳng những clip này lên màn hình chủ thì ra cảnh một người đá vào không khí.
+
+Muốn có bóng thì phải tự animate nó, và cột `knee_t_s` / `foot_t_s` trong
+`menu-clip-probe.tsv` chính là danh sách keyframe cần thiết — thời điểm chân hoặc gối lên
+cao nhất là khung chạm bóng:
+
+| Clip | Chạm ở giây | Tỷ lệ trong clip |
+|---|---|---|
+| `JuggleKickUp` | 0.650 (bàn chân) | 0.494 |
+| `JuggleKnee_A` | 0.533 (đầu gối) | 0.604 |
+| `JuggleKnee_B` | 0.283 (đầu gối) | 0.447 |
+| `Stall_C` | 1.783 (đầu gối) | 0.775 |
+
+Giữa hai lần chạm, bóng đi theo một parabol — dựng bằng Timeline hoặc AnimationCurve, không
+cần vật lý. **Không dùng vật lý thật cho cảnh menu:** nó không tất định, chỉ cần lệch một
+chút là bóng rơi ra ngoài khung hình và vòng lặp hỏng.
+
+Lưu ý: đỉnh của đầu gối là *xấp xỉ* khung chạm, không phải chính xác — thực tế bóng bị đánh
+ngay trước lúc gối lên hết. Sai số cỡ 1–2 khung, chỉnh bằng mắt là xong.
+
+## 7. Đã loại khỏi nhóm menu
+
+| Clip | Lý do |
+|---|---|
+| `Stall_A`, `Stall_B`, `Stall_D` | Trùng vai trò với `Stall_C`, gối thấp hơn (9.0 / 11.6 / 20.7 cm) |
+| `Header_A`, `Header_B` | Đánh đầu không liên quan phạt đền, lại cần thêm quỹ đạo bóng bay tới |
+| `ScissorKick` | Đẹp nhưng seam 65.6 cm nên không lặp được; thiếu bóng thì thành cảnh ngã |
+| `ReceiveBall` | Dịch chuyển 2.615 m — ra khỏi khung hình menu |
+| `KeeperDirecting` | 7.167 s, dịch 1.607 m; `KeeperIdle_A` sẵn có làm nền tốt hơn |
+
+## 8. Việc tiếp theo
 
 1. T35: đo `ContactNormalizedTime` cho từng clip sút. Bốn clip sút hiện có 30–90 khung ở
    60 fps, đủ độ phân giải cho yêu cầu sai số dưới 1 khung.
 2. Kiểm `KeeperDivingSave_A` và `_B` bay về bên nào. Nếu cùng một bên thì dùng cờ **Mirror**
    của clip Humanoid để có bên còn lại, không cần tải thêm.
+3. Dựng cảnh menu: cần một quả bóng animate theo bảng keyframe ở mục 6, và một Timeline
+   ghép `JuggleKickUp → (Knee_A + Knee_B) × n → Stall_C`.
