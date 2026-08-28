@@ -66,6 +66,11 @@ namespace Eleven.Presentation
                 case CameraShot.ReplayOrbit:
                     return ComputeOrbitPosition(0.0f, 15.0f, 3.5f, new float3(0.0f, 1.22f, 11.0f));
 
+                // Cận mặt người sút: chỗ đứng thật do CameraRig.SetKickerFace tính từ xương
+                // đầu; đây chỉ là chỗ mặc định khi chưa có model — trước mặt chỗ chân trụ.
+                case CameraShot.KickerFace:
+                    return new float3(0.20f, 1.75f, 1.20f);
+
                 default:
                     return new float3(0.0f, 2.9f, -10.5f);
             }

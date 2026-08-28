@@ -19,6 +19,13 @@ namespace Eleven.Presentation.Net
         public float3 ballPosition;
         public float3 ballVelocity;
         public float ballRadius;
+
+        /// <summary>
+        /// Bán kính "với" tới hạt lưới, do <see cref="NetSimulator.InfluenceRadiusFor"/> tính
+        /// từ cỡ ô lưới. Để 0 thì rơi về đúng bán kính quả bóng như trước.
+        /// </summary>
+        public float influenceRadius;
+
         public float dt;
         public float damping;
         public int iterations;
@@ -43,8 +50,23 @@ namespace Eleven.Presentation.Net
             }
 
             // 2. Va chạm liên tục (CCD) giữa hạt và quỹ đạo quả bóng
-            float effectiveRadius = ballRadius + 0.02f; // biên an toàn độ dày sợi lưới
+            //
+            // Bán kính dùng ở đây LỚN HƠN quả bóng thật, cố ý: lưới là mạng hạt thưa chứ
+            // không phải mặt liền, giữa bốn hạt là một lỗ rộng bằng ô lưới. Lấy đúng 0.11m
+            // thì quả bóng bay vào giữa ô chui lọt qua mà không hạt nào nhúc nhích — đúng
+            // triệu chứng "lưới gần như không rung" báo ngày 2026-08-28. Xem
+            // NetSimulator.InfluenceRadiusFor để biết con số ở đâu ra.
+            float effectiveRadius = math.max(ballRadius + 0.02f, influenceRadius);
             float effectiveRadiusSq = effectiveRadius * effectiveRadius;
+            float ballSpeed = math.length(ballVelocity);
+            float3 ballDir = ballSpeed > 1e-4f ? ballVelocity / ballSpeed : new float3(0f, 0f, 1f);
+
+            // Xung lực truyền cho hạt bị chạm, tính bằng m/s. Chặn trần vì cú sút 30 m/s mà
+            // truyền thẳng tỉ lệ thì hạt lưới bắn đi cả mét trong một khung hình, trông như
+            // lưới nổ chứ không phải lưới rung. Trần 3 m/s cho độ võng chừng 0.3m trong hai
+            // phần mười giây — đúng tầm một pha bóng găm lưới thật.
+            float kickSpeed = math.min(ballSpeed * 0.35f, 3.0f);
+
             float3 prevBallPos = ballPosition - ballVelocity * dt;
             float3 ballTraj = ballPosition - prevBallPos;
             float trajLenSq = math.dot(ballTraj, ballTraj);
@@ -69,8 +91,14 @@ namespace Eleven.Presentation.Net
                             : (math.lengthsq(ballVelocity) > 1e-4f ? math.normalize(ballVelocity) : new float3(0f, 0f, 1f));
 
                         p.position = closestBallCenter + normal * effectiveRadius;
-                        // Truyền quán tính hướng bay để lưới bung căng tự nhiên
-                        p.prevPosition = p.position - normal * (math.length(ballVelocity) * dt * 0.25f);
+
+                        // Truyền quán tính để lưới bung căng tự nhiên. Hướng hất pha giữa
+                        // pháp tuyến (lưới ôm quanh bóng) và hướng bay (lưới bị đẩy về sau);
+                        // mạnh nhất ở tâm va chạm, tắt dần ra rìa tầm với, nhờ vậy vết lõm
+                        // loang ra thành sóng thay vì một cái hố vuông thành sắc cạnh.
+                        float falloff = 1.0f - dist / effectiveRadius;
+                        float3 kickDir = math.normalizesafe(normal * 0.4f + ballDir * 0.6f, normal);
+                        p.prevPosition = p.position - kickDir * (kickSpeed * falloff * dt);
                         particles[i] = p;
                     }
                 }

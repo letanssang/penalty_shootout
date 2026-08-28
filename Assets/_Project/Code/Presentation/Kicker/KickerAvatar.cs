@@ -519,6 +519,9 @@ namespace Eleven.Presentation
         KickerClip _clip = KickerClip.Idle;
         float _strikeElapsed;
 
+        /// <summary>Quả cầu "Head" của greybox — máy quay cận mặt ở pha phản ứng nhắm vào đây.</summary>
+        Transform IKickerAnimator.Head => _head;
+
         KickerClip IKickerAnimator.CurrentClip => _clip;
 
         float IKickerAnimator.NormalizedTime => math.saturate(_strikeElapsed / k_StrikeSeconds);

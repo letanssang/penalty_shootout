@@ -1,0 +1,19 @@
+# Đo trên Assets/_Project/Art/Characters/Goalkeeper.fbx, 40 mẫu/clip, toạ độ THẾ GIỚI (m).
+# hongDau/hongCuoi = chiều cao xương hông ở khung đầu/cuối. Dưới 0.55 coi như NẰM.
+# vuonXa = khoảng cách xa nhất từ vai tới bàn tay đạt được trong clip.
+# tayCaoNhat = độ cao lớn nhất một bàn tay với tới. tayXaNgang = |x| lớn nhất của bàn tay.
+clip	hongDau	hongCuoi	hongThapNhat	dauDau	dauCuoi	vuonXa	tayCaoNhat	tayXaNgang	tDinhVuon	dang
+KeeperBodyBlock_A	0.90	0.90	0.16	1.33	1.33	0.71	0.87	1.84	0.69	dung->dung
+KeeperBodyBlock_B	0.94	0.94	0.18	1.41	1.41	0.75	0.98	1.87	0.69	dung->dung
+KeeperBodyBlock_C	0.87	0.84	0.19	1.33	1.32	0.72	1.05	2.32	0.15	dung->dung
+KeeperCatch_A	0.90	0.86	0.75	1.33	1.34	0.57	0.94	0.84	0.00	dung->dung
+KeeperCatch_B	0.94	0.92	0.87	1.41	1.39	0.62	1.35	0.52	0.00	dung->dung
+KeeperCatch_D	0.90	0.86	0.66	1.33	1.34	0.62	2.18	0.74	0.23	dung->dung
+KeeperCelebrate	0.94	0.94	0.88	1.41	1.41	0.75	1.77	0.62	0.36	dung->dung
+KeeperDivingSave_A	0.94	0.92	0.15	1.41	1.39	0.66	1.28	2.96	0.10	dung->dung
+KeeperDivingSave_B	0.94	0.92	0.16	1.41	1.39	0.63	1.54	3.68	0.26	dung->dung
+KeeperIdle_A	0.90	0.90	0.85	1.33	1.33	0.60	0.86	0.46	0.18	dung->dung
+KeeperIdle_B	0.91	0.91	0.89	1.40	1.40	0.44	0.99	0.19	0.13	dung->dung
+KeeperMiss	0.94	0.84	0.76	1.41	1.24	0.78	2.34	0.69	0.38	dung->dung
+KeeperSidestep_A	0.76	0.76	0.76	1.16	1.16	0.73	0.89	1.66	0.15	dung->dung
+KeeperSidestep_B	0.84	0.84	0.83	1.29	1.29	0.75	1.04	2.17	0.77	dung->dung

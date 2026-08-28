@@ -22,8 +22,9 @@ namespace Eleven.Presentation.Net
         {
             if (isInitialized) return;
 
-            // Khởi tạo NetSimulator (287 hạt Verlet, z = 11.0m đến 12.8m)
-            simulator = new NetSimulator(17, 9, 5);
+            // Khởi tạo NetSimulator (378 hạt Verlet, z = 11.0m đến 12.8m).
+            // Cỡ lưới để mặc định — NetGridGenerator.GenerateBoxNet giữ lý do chọn 24 x 9 x 5.
+            simulator = new NetSimulator();
 
             var particles = simulator.Particles;
             int count = particles.Length;
@@ -34,12 +35,18 @@ namespace Eleven.Presentation.Net
                 meshVertices[i] = (Vector3)(float3)particles[i].position;
             }
 
-            // Sinh topology hình học cho lưới
+            // Sinh topology hình học cho lưới.
+            //
+            // CHỈ VẼ CẠNH KHUNG Ô, không vẽ ràng buộc chéo. Ràng buộc chéo có thật trong mô
+            // phỏng (nó chống cho lưới khỏi xô lệch thành hình thoi) nhưng nó KHÔNG phải sợi
+            // lưới — vẽ luôn cả nó thì mỗi ô mọc thêm hai vạch chéo, ra tấm lưới toàn tam
+            // giác và chữ X. Lưới bóng đá thật là ô vuông, nên chỉ lấy khúc đầu của mảng
+            // ràng buộc (NetGridGenerator xếp cạnh khung ô lên trước đúng vì việc này).
             var constraints = simulator.Constraints;
-            int numConstraints = constraints.Length;
-            var indicesList = new List<int>(numConstraints * 2);
+            int numDrawn = simulator.StructuralConstraintCount;
+            var indicesList = new List<int>(numDrawn * 2);
 
-            for (int i = 0; i < numConstraints; i++)
+            for (int i = 0; i < numDrawn; i++)
             {
                 var c = constraints[i];
                 indicesList.Add(c.x);

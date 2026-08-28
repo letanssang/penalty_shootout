@@ -17,19 +17,50 @@ namespace Eleven.Presentation.Net
         private NativeArray<int2> _constraints;
         private NativeArray<float> _restLengths;
         private bool _isAllocated;
+        private int _structuralCount;
+        private float _cellDiagonal;
 
         public int ParticleCount => _isAllocated ? _particles.Length : 0;
         public int ConstraintCount => _isAllocated ? _constraints.Length : 0;
         public bool IsAllocated => _isAllocated;
 
-        public NetSimulator(int cols = 17, int rows = 9, int depthSteps = 5)
+        /// <summary>
+        /// Bao nhiêu ràng buộc đầu mảng <see cref="Constraints"/> là cạnh khung ô. Bên vẽ chỉ
+        /// dựng chừng đó vạch để ra lưới ô vuông; phần chéo còn lại là ràng buộc mô phỏng,
+        /// có tác dụng chống xô lệch chứ không phải sợi lưới thật.
+        /// </summary>
+        public int StructuralConstraintCount => _isAllocated ? _structuralCount : 0;
+
+        public NetSimulator(int cols = 24, int rows = 9, int depthSteps = 5)
         {
             var data = NetGridGenerator.GenerateBoxNet(cols, rows, depthSteps);
 
             _particles = new NativeArray<NetParticle>(data.particles, Allocator.Persistent);
             _constraints = new NativeArray<int2>(data.constraints, Allocator.Persistent);
             _restLengths = new NativeArray<float>(data.restLengths, Allocator.Persistent);
+            _structuralCount = data.structuralCount;
+            _cellDiagonal = data.backCellDiagonal;
             _isAllocated = true;
+        }
+
+        /// <summary>
+        /// Bán kính quả bóng "với" tới hạt lưới. KHÔNG bằng bán kính bóng thật, và đó là chủ ý.
+        ///
+        /// Lưới ở đây là mạng hạt thưa, không phải mặt liên tục: giữa bốn hạt là một khoảng
+        /// trống rộng bằng ô lưới. Một quả bóng bán kính 0.11m bay đúng vào giữa ô 0.32m thì
+        /// hạt gần nhất vẫn cách tâm bóng 0.226m — xa hơn bán kính bóng gấp đôi, nên trước
+        /// ngày 2026-08-28 phần lớn cú sút không đẩy nổi một hạt nào và lưới gần như đứng im.
+        ///
+        /// Lấy 0.56 lần đường chéo ô — vừa qua nửa đường chéo (0.5) một quãng 12% dự phòng —
+        /// thì mọi điểm trên mặt lưới đều có ít nhất một hạt nằm trong tầm với. Cố tình bám
+        /// sát ngưỡng chứ không lấy dư: bán kính này cũng là khoảng cách hạt bị giữ ra xa tâm
+        /// bóng lúc bóng nằm im trong lưới, lấy dư thì quả bóng trông như lơ lửng trong một
+        /// cái bong bóng. Vẫn kẹp sàn theo bán kính bóng để nếu sau này chia lưới mịn hơn thì
+        /// bóng không thu nhỏ lại.
+        /// </summary>
+        public float InfluenceRadiusFor(float ballRadius)
+        {
+            return math.max(ballRadius + 0.02f, _cellDiagonal * 0.56f);
         }
 
         public NativeArray<NetParticle> Particles => _particles;
@@ -56,6 +87,7 @@ namespace Eleven.Presentation.Net
                 ballPosition = ballPosition,
                 ballVelocity = ballVelocity,
                 ballRadius = ballRadius,
+                influenceRadius = InfluenceRadiusFor(ballRadius),
                 dt = dt,
                 damping = damping,
                 iterations = iterations

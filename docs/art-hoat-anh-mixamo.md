@@ -183,9 +183,11 @@ một cú bấm nhầm trong Inspector sẽ không để lại dấu vết nào 
 | Root Transform **Rotation** | *có* bake vào pose | Thân người xoay theo clip, hướng mặt nhân vật vẫn do gameplay đặt. |
 | Tên clip | = tên file | Mixamo đặt tên **mọi** take là `mixamo.com`. Để nguyên thì Animator hiện 22 clip trùng tên. |
 
-Ba dòng cuối (Y và Rotation bake vào pose) là lựa chọn cần xem lại ở T37/T38: nếu đường
-bay người của thủ môn phải khớp từng centimet với `KeeperReach.ReachProgress` thì có khả
-năng phải bake cả Y ra ngoài và để gameplay dựng luôn quỹ đạo dọc.
+Ba dòng cuối (Y và Rotation bake vào pose) từng bị đánh dấu "cần xem lại ở T37/T38", phòng
+khi đường bay người phải khớp từng centimet với `KeeperReach.ReachProgress`. **Giữ nguyên,
+2026-08-28.** Cách khớp cuối cùng không đụng tới quỹ đạo của clip: clip chỉ diễn tư thế, còn
+bàn tay bị `KeeperHandIK` ghim vào toạ độ gameplay — xem mục 8. Bake Y vào pose là đúng cái
+cần có, vì nhờ nó thủ môn nằm xuống được trong khi gốc toạ độ vẫn do code đặt.
 
 ---
 
@@ -256,7 +258,50 @@ ngay trước lúc gối lên hết. Sai số cỡ 1–2 khung, chỉnh bằng m
 
 1. T35: đo `ContactNormalizedTime` cho từng clip sút. Bốn clip sút hiện có 30–90 khung ở
    60 fps, đủ độ phân giải cho yêu cầu sai số dưới 1 khung.
-2. Kiểm `KeeperDivingSave_A` và `_B` bay về bên nào. Nếu cùng một bên thì dùng cờ **Mirror**
-   của clip Humanoid để có bên còn lại, không cần tải thêm.
-3. Dựng cảnh menu: cần một quả bóng animate theo bảng keyframe ở mục 6, và một Timeline
+2. ~~Kiểm `KeeperDivingSave_A` và `_B` bay về bên nào.~~ **Đo xong 2026-08-28** bằng
+   `Eleven > Art > Đo Chiều Bay Thủ Môn` (`KeeperClipProbe`), đọc thẳng đường cong `RootT.x`:
+
+   | clip | dx (m) | chiều |
+   |---|---:|---|
+   | `KeeperDivingSave_A` | −2.25 | bay về −x |
+   | `KeeperDivingSave_B` | +2.80 | bay về +x |
+   | `KeeperSidestep_A` | −1.20 | −x |
+   | `KeeperSidestep_B` | +1.63 | +x |
+   | `KeeperBodyBlock_A` | −0.24 | −x |
+   | `KeeperBodyBlock_B` | +0.40 | +x |
+   | `KeeperCatch_D` | +0.04 | giữa |
+
+   Hai clip đã sẵn hai bên, **không cần cờ Mirror**.
+
+3. ~~Đưa clip bay người vào game.~~ **Xong 2026-08-28.** Trước đó thủ môn chỉ phát
+   `KeeperIdle_B` lúc đứng chờ rồi TẮT Animator ngay khi chạm bóng, nên pha cản phá là một
+   khối người trượt ngang rồi đứng hình ở tư thế cuối cho tới hết lượt.
+
+   Lý do trì hoãn là bất biến của `GoalkeeperView`: đường bay NHÌN THẤY phải trùng đúng công
+   thức `KeeperReach` mà `SaveResolver` đem đi chấm, còn clip thì diễn theo quỹ đạo của diễn
+   viên — chênh chỗ nào thì chỗ đó ra pha "mắt thấy tay chạm bóng, máy báo thủng lưới".
+
+   Cách gỡ **không phải** kéo `KeeperReach` về khớp clip như dự tính cũ, mà là chia lại việc
+   giữa ba thứ, để phần ảnh hưởng tới kết quả chấm không đụng vào clip:
+
+   | phần | ai lái | vì sao |
+   |---|---|---|
+   | vị trí gốc toạ độ | code, vẫn bằng `ReachProgress` như cũ | quyết định thủ môn tới được đâu |
+   | tư thế (nhào, chạm đất, chống tay đứng dậy) | clip Mixamo | không ảnh hưởng gì tới điểm chấm |
+   | bàn tay | `KeeperHandIK` ghim vào `KeeperReach.HandPositionAt` | ĐÂY là điểm `SaveResolver` đo |
+
+   Bất biến vì thế không hề được nới; chỉ có dáng người mới trả về cho hoạt ảnh.
+
+   Hai số đo cho phép làm việc này (`Eleven > Art > Đo Tư Thế Clip Thủ Môn` →
+   `docs/data/keeper-clip-pose.tsv`):
+
+   - **Clip bay người đã có sẵn pha đứng dậy.** Hông đi 0.94 m → 0.15 m → 0.92 m trong cùng
+     một clip. Không phải tải thêm clip "get up" nào từ Mixamo — giả định ngược lại là sai.
+   - **Cánh tay dài 0.7 m, khoảng hở còn lại 0.61 m.** Sau khi code đẩy thân tới
+     `cell.x * 0.80`, phần còn lại tới tâm ô xa nhất vừa đúng tầm với, nên IK kéo tay tới đích
+     được thật chứ không phải kéo dai ra.
+
+   Bảng ô → clip nằm trong `KeeperAnimatorControllerBuilder.CellClips`, chọn theo số đo chứ
+   không theo tên file; chiều bay lấy từ bảng dấu ngay phía trên, nên không dùng cờ Mirror.
+4. Dựng cảnh menu: cần một quả bóng animate theo bảng keyframe ở mục 6, và một Timeline
    ghép `JuggleKickUp → (Knee_A + Knee_B) × n → Stall_C`.

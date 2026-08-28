@@ -2,6 +2,7 @@
     "name": "Eleven.Editor.Ball",
     "rootNamespace": "",
     "references": [
+        "Eleven.Editor.Art",
         "Eleven.Ball",
         "Eleven.Keeper",
         "Eleven.Shooter",

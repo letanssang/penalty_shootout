@@ -69,7 +69,7 @@ namespace Eleven.Presentation.Kicker
         KickerClip _current = KickerClip.Idle;
         bool _started;
 
-        Transform _hips, _leftFoot, _rightFoot;
+        Transform _hips, _leftFoot, _rightFoot, _head;
 
         // ── IKickerAnimator ────────────────────────────────────────────────────────
 
@@ -82,6 +82,7 @@ namespace Eleven.Presentation.Kicker
 
         public Transform Root => transform;
         public Transform Hips => _hips;
+        public Transform Head => _head;
 
         /// <summary>Chân trụ là chân TRÁI ở cả bốn clip sút: ba clip vốn thuận phải, còn
         /// StrikeChip đã bật cờ mirror trong controller nên cũng thành thuận phải.</summary>
@@ -229,10 +230,15 @@ namespace Eleven.Presentation.Kicker
             _hips      = _animator.GetBoneTransform(HumanBodyBones.Hips);
             _leftFoot  = _animator.GetBoneTransform(HumanBodyBones.LeftFoot);
             _rightFoot = _animator.GetBoneTransform(HumanBodyBones.RightFoot);
+            _head      = _animator.GetBoneTransform(HumanBodyBones.Head);
 
             if (_hips == null || _leftFoot == null || _rightFoot == null)
                 Debug.LogError($"[MecanimKickerAnimator] {name}: thiếu xương Hips/LeftFoot/RightFoot — " +
                                "KickerBoneCueSource sẽ đọc ra số 0.", this);
+
+            if (_head == null)
+                Debug.LogWarning($"[MecanimKickerAnimator] {name}: không có xương Head — góc cận mặt " +
+                                 "ở pha phản ứng sẽ rơi về chỗ đặt máy mặc định, không bám người sút.", this);
 
             // Nếu ai đó thay clip trong controller mà quên chạy lại probe, các hằng ở đầu file
             // thành số ma. Bắt lỗi đó ngay lúc khởi động thay vì để nó biểu hiện thành

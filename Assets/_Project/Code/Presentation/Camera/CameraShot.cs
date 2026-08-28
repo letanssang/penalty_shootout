@@ -21,6 +21,13 @@ namespace Eleven.Presentation
         NetCam,
 
         /// <summary>Góc máy xoay quỹ đạo cho pha phát lại (Replay), có giới hạn góc cứng.</summary>
-        ReplayOrbit
+        ReplayOrbit,
+
+        /// <summary>
+        /// Cận mặt người sút ở pha phản ứng — máy đứng trước mặt, hơi chếch, nhìn ngược lại.
+        /// Khác mọi góc trên ở chỗ nó KHÔNG cố định trong không gian: vị trí tính từ đầu
+        /// người sút tại đúng khoảnh khắc cắt cảnh, xem <c>CameraRig.SetKickerFace</c>.
+        /// </summary>
+        KickerFace
     }
 }

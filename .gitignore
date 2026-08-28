@@ -74,3 +74,7 @@ may1_*.log
 /Assets/Resources/PerformanceTestRunInfo.json.meta
 /Assets/Resources/PerformanceTestRunSettings.json
 /Assets/Resources/PerformanceTestRunSettings.json.meta
+
+# Mono đổ bộ nhớ khi tiến trình batchmode thoát trên macOS. Không phải lỗi build,
+# nhưng mỗi lần chạy đẻ ra ~14MB rác ngay thư mục gốc.
+/mono_crash.*.blob

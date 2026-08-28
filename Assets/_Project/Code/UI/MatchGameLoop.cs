@@ -27,7 +27,9 @@ namespace Eleven.UI
     ///   Phase 3  KickerBoneCueSource → BayesianKeeperBrain → SimpleKeeperController
     ///            → ReachEnvelope/KeeperReach → SaveResolver, ShotHistory
     ///   Phase 4  ShootoutRules, KickSequencer, MatchSave, DifficultySelector
-    ///   Phase 5  CameraDirector/CameraRig, ReplayPlayer, GoalNetView, hậu kỳ va chạm
+    ///   Phase 5  CameraDirector/CameraRig, GoalNetView, hậu kỳ va chạm
+    ///            (ReplayPlayer của T27 vẫn còn và vẫn có test, nhưng vòng lặp này không
+    ///             gọi tới nữa — xem ghi chú "Phát lại" ở cuối file)
     ///   Phase 6  BenchmarkRunner/SoakTest (qua DebugHotkeys)
     ///
     /// NHỊP MỘT LƯỢT SÚT (sửa 2026-08-28 — xem ghi chú "MỘT CỬ CHỈ" bên dưới):
@@ -90,7 +92,6 @@ namespace Eleven.UI
         private readonly KickSequencer _seq = new KickSequencer();
         private DifficultySelector _difficulty;
         private readonly ImpactPostProcessEffect _impact = new ImpactPostProcessEffect();
-        private ReplayPlayer _replayPlayer;
         private KickPhaseDurations _durations;
         private ShootoutState _state;
 
@@ -110,9 +111,6 @@ namespace Eleven.UI
         private float _sinceCrossing;
         private float _strikeTimer = -1f;
         private KickResult _lastResult = KickResult.Pending;
-        private ReplayKickData _lastKickData;
-        private float3 _lastLaunchVelocity;
-        private bool _hasReplay;
         private float3 _currentAimPoint = new float3(0f, 1.22f, GoalPlaneZ);
         private float _aimLateralShift;    // người sút dạt ngang bao nhiêu mét theo hướng ngắm
 
@@ -122,10 +120,6 @@ namespace Eleven.UI
         private ShotIntent _pendingIntent;
         private bool _hasPendingIntent;
         private bool _matchOver;
-
-        // ── Replay ───────────────────────────────────────────────────────────
-        private bool _replayActive;
-        private float _replayOrbitYaw;
 
         // ── Bộ đệm HUD (dựng một lần, tránh cấp phát mỗi khung) ──────────────
         private readonly List<KickResult> _homeCache = new List<KickResult>(16);
@@ -213,7 +207,6 @@ namespace Eleven.UI
 
             if (scoreboard != null)
             {
-                scoreboard.OnReplayClicked += PlayReplay;
                 scoreboard.OnNextKickClicked += HandleNextKickPressed;
                 scoreboard.OnDifficultyChanged += HandleDifficultyChanged;
                 scoreboard.SetDifficulty(_difficulty.Current);
@@ -254,7 +247,6 @@ namespace Eleven.UI
 
             if (scoreboard != null)
             {
-                scoreboard.OnReplayClicked -= PlayReplay;
                 scoreboard.OnNextKickClicked -= HandleNextKickPressed;
                 scoreboard.OnDifficultyChanged -= HandleDifficultyChanged;
             }
@@ -269,13 +261,6 @@ namespace Eleven.UI
         private void Update()
         {
             float dt = Time.deltaTime;
-
-            if (_replayActive)
-            {
-                TickReplay(dt);
-                cameraRig?.Tick(dt);
-                return;
-            }
 
             _seq.Tick(dt);
 
@@ -391,16 +376,17 @@ namespace Eleven.UI
 
             if (_driver == null) return;
 
-            // Lưới chỉ rung khi bóng còn sống; nhưng ĐỒNG HỒ PHÁN KẾT QUẢ thì phải chạy tiếp
-            // kể cả khi bóng đã chết. Thủ môn bắt dính là đóng băng bóng ngay tại chỗ — nếu
-            // đồng hồ này nằm trong nhánh "bóng còn sống" thì mọi pha bắt dính sẽ không bao giờ
-            // được phán, sequencer tự trôi sang Resolution với kết quả Pending, và bảng tỷ số
-            // ăn một lượt ma.
-            if (_driver.IsLive)
-            {
-                BallState s = _driver.State;
-                goalNet?.UpdateSimulation(dt, s.position, s.velocity, BallRadius);
-            }
+            // Lưới chạy KỂ CẢ khi bóng đã chết. Bóng nằm im trong lưới thì vận tốc bằng 0
+            // nên không có xung lực mới, nhưng tấm lưới vẫn còn đang đung đưa và vẫn phải
+            // ôm lấy quả bóng đang tì vào nó. Trước ngày 2026-08-28 chỗ này chặn theo
+            // IsLive, nên đúng khoảnh khắc bóng nằm yên thì lưới đứng hình giữa nhịp rung —
+            // vết lõm treo cứng ở đó cho tới hết lượt.
+            //
+            // ĐỒNG HỒ PHÁN KẾT QUẢ bên dưới cũng phải nằm ngoài mọi nhánh "bóng còn sống",
+            // vì lý do riêng: thủ môn bắt dính làm bóng chết ngay tại chỗ, mà nếu đồng hồ
+            // ngừng theo thì pha bắt dính không bao giờ được phán, sequencer tự trôi sang
+            // Resolution với kết quả Pending, và bảng tỷ số ăn một lượt ma.
+            TickNet(dt);
 
             if (_crossingResolved)
             {
@@ -422,11 +408,19 @@ namespace Eleven.UI
             goalkeeper?.TickDive(dt);
             TickKicker(dt);
 
-            if (_driver != null && _driver.IsLive)
-            {
-                BallState s = _driver.State;
-                goalNet?.UpdateSimulation(dt, s.position, s.velocity, BallRadius);
-            }
+            TickNet(dt);
+        }
+
+        /// <summary>
+        /// Đẩy lưới đi một nhịp theo chỗ đứng hiện tại của bóng. Không hỏi bóng còn sống hay
+        /// không — lý do ở TickFlight.
+        /// </summary>
+        private void TickNet(float dt)
+        {
+            if (goalNet == null || _driver == null) return;
+
+            BallState s = _driver.State;
+            goalNet.UpdateSimulation(dt, s.position, s.velocity, BallRadius);
         }
 
         // ═══════════════════════════════════════════════════════════════════════
@@ -509,6 +503,39 @@ namespace Eleven.UI
 
         private bool _frameBounced;
 
+        /// <summary>
+        /// Bàn tay đang giữ bóng sau pha bắt dính, null khi bóng còn tự do. Giữ Transform chứ
+        /// không giữ toạ độ: cái cần bám là một xương đang cử động.
+        /// </summary>
+        private Transform _heldBall;
+
+        /// <summary>
+        /// Dắt bóng theo bàn tay thủ môn, chạy ở LateUpdate.
+        ///
+        /// PHẢI là LateUpdate: Animator ghi tư thế xương trong pha Update, đọc vị trí bàn tay
+        /// ở Update là lấy phải tư thế của khung TRƯỚC, và quả bóng lê sau bàn tay đúng một
+        /// khung — ở 60fps với pha đứng dậy nhanh thì thấy rõ bóng rời khỏi tay.
+        /// </summary>
+        private void LateUpdate()
+        {
+            if (_heldBall == null || _driver == null) return;
+
+            // Đẩy bóng ra khỏi lòng bàn tay đúng một bán kính, theo hướng từ thân thủ môn ra
+            // tới tay. Không dùng trục của xương: mỗi rig Mixamo đặt trục bàn tay một kiểu,
+            // bám vào đó là đổi model một cái bóng lại chui vào trong cổ tay.
+            Vector3 handPos = _heldBall.position;
+            Vector3 outward = handPos - goalkeeper.transform.position;
+            outward = outward.sqrMagnitude > 1e-6f ? outward.normalized : Vector3.back;
+
+            Vector3 ballPos = handPos + outward * BallRadius;
+            ballTransform.position = ballPos;
+
+            // Đồng bộ luôn trạng thái solver: lưới đọc _driver.State mỗi khung để biết đẩy
+            // chỗ nào. Bỏ qua bước này thì bóng đã nằm trong tay thủ môn mà lưới vẫn bị thúc
+            // ở chỗ nó vừa bay qua.
+            _driver.Override(new BallState((float3)ballPos, float3.zero, float3.zero));
+        }
+
         private void ApplySaveToBall(in BallState atCrossing, SaveResult result, float3 deflectVelocity)
         {
             if (result == SaveResult.Missed) return;
@@ -519,16 +546,29 @@ namespace Eleven.UI
 
             if (result == SaveResult.Caught)
             {
-                // Bắt dính: bóng chết trong tay. NHƯNG đừng đóng băng nó lơ lửng giữa không
-                // trung như bản cũ. Thủ môn hiện vẫn là mấy khối trụ (T38 mới thay model),
-                // nên quả bóng đứng khựng trên không đọc ra thành LỖI chứ không thành pha bắt
-                // bóng — đúng cái người chơi báo là "không có quán tính mà dừng lại luôn".
-                // Cho nó tuột khỏi tay rơi xuống cỏ, PitchCollision sẽ đưa về nằm yên.
+                // Bắt dính: bóng ở lại TRONG TAY và đi theo bàn tay suốt pha đứng dậy.
                 //
-                // Cũng KHÔNG Freeze ở đây nữa: Freeze cắt luôn goalNet.UpdateSimulation (chỉ
-                // chạy khi driver còn IsLive), nên mọi pha bắt dính trước đây làm tấm lưới
-                // cứng đờ giữa chừng.
-                _driver.Override(new BallState(atCrossing.position, new float3(0f, -1.2f, -0.6f), float3.zero));
+                // Hai bản trước đều sai, theo hai kiểu ngược nhau. Bản đầu đóng băng bóng lơ
+                // lửng giữa không trung — không quán tính, đọc ra thành lỗi. Bản sau cho bóng
+                // tuột khỏi tay rơi xuống cỏ, vì lúc đó thủ môn còn là mấy khối trụ, không có
+                // bàn tay nào để bóng bám vào. Từ khi có model có xương thật thì lý do đó hết
+                // hiệu lực, mà pha "bắt dính" làm rơi bóng thì đúng là trông như bắt hụt.
+                //
+                // Gắn vào xương chứ không đặt một chỗ cố định: bàn tay còn di chuyển hết pha
+                // hồi phục, bóng phải đi theo thì mới ra hình thủ môn ôm bóng đứng lên.
+                Transform hand = goalkeeper != null ? goalkeeper.CatchHand : null;
+                if (hand != null)
+                {
+                    _heldBall = hand;
+                    _driver.Freeze();   // ngừng mô phỏng: từ giờ tay dắt bóng, không phải khí động
+                }
+                else
+                {
+                    // Không có xương tay (nhánh greybox): giữ nguyên cách cũ, thà bóng rơi
+                    // xuống cỏ còn hơn đứng khựng trên không.
+                    _driver.Override(new BallState(atCrossing.position, new float3(0f, -1.2f, -0.6f), float3.zero));
+                }
+
                 _shotLive = false;
                 if (ballTrail != null) ballTrail.emitting = false;
                 return;
@@ -709,9 +749,9 @@ namespace Eleven.UI
             _saveResult = SaveResult.Missed;
             _sinceCrossing = 0f;
             _strikeTimer = 0f;
+            _heldBall = null;   // quả trước còn dính tay thì cú này bóng vẫn phải bay tự do
 
             _launchVelocity = TouchSwipeReceiver.SolveLaunchVelocity(in intent, BallParams.Default);
-            _lastLaunchVelocity = _launchVelocity;
 
             var launchState = new BallState(new float3(0f, BallRadius, 0f), _launchVelocity, intent.spin);
             _driver.Launch(in launchState);
@@ -732,17 +772,6 @@ namespace Eleven.UI
             scoreboard?.SetCurrentShotInfo(intent.type, intent.speed);
             scoreboard?.SetPrompt(string.Empty);
             audioDirector?.SetCrowdTension(0.85f);
-
-            // Dữ liệu phát lại: seed + intent là đủ để dựng lại nguyên cú sút (T27).
-            _lastKickData = new ReplayKickData
-            {
-                seed = _kickSeed,
-                intent = intent,
-                expectedOutcome = ShotOutcome.Goal,
-                expectedCrossing = intent.aimPoint,
-                expectedCell = GoalGeometry.CellOf(intent.aimPoint)
-            };
-            _hasReplay = true;
 
             if (cameraRig != null) cameraRig.SetBallTracking(true);
         }
@@ -908,6 +937,7 @@ namespace Eleven.UI
             _aimLateralShift = 0f;
             _hasPendingIntent = false;
             aimTrajectory?.Hide();
+            _heldBall = null;
             _driver?.ResetTo(new float3(0f, BallRadius, 0f));
             if (ballTrail != null) { ballTrail.Clear(); ballTrail.emitting = false; }
 
@@ -915,6 +945,7 @@ namespace Eleven.UI
             kicker?.ResetToStart(new float3(0f, BallRadius, 0f));
 
             scoreboard?.HideBanner();
+            scoreboard?.HideNotice();
             scoreboard?.HideShotBadge();
             scoreboard?.SetKeeperDebug(string.Empty);
 
@@ -979,20 +1010,23 @@ namespace Eleven.UI
             // thành một mảng cỏ vô nghĩa — đo được trên máy thật 2026-08-27.
             cameraRig?.SetBallTracking(false);
 
+            // CẮT CẢNH, không blend. Blend 0.35s là camera trượt ngang qua sân trong lúc
+            // pha bóng vừa xong — mắt bám theo đường trượt chứ không kịp đọc chuyện gì vừa
+            // xảy ra. Cắt thẳng như truyền hình: khung mới, thông tin mới.
             if (scored)
             {
                 audioDirector?.PlayNet();
                 audioDirector?.PlayCrowdRoar();
                 _impact.TriggerImpact(0.85f, 0.15f);
                 cameraRig?.Shake(0.12f, 0.35f);
-                cameraRig?.SetShot(CameraShot.NetCam, 0.35f);
+                cameraRig?.SetShot(CameraShot.NetCam, 0f);
             }
             else
             {
                 audioDirector?.PlayCrowdGroan();
                 // Pha cứu thua xem từ góc thấp trên sân, KHÔNG xem từ mắt thủ môn: camera đứng
                 // ngay chỗ thủ môn thì chính thủ môn che hết khung hình.
-                cameraRig?.SetShot(keeperTouched ? CameraShot.LowAngle : CameraShot.Broadcast, 0.35f);
+                cameraRig?.SetShot(keeperTouched ? CameraShot.LowAngle : CameraShot.Broadcast, 0f);
             }
 
             // Luật luân lưu là của T22 — ở đây chỉ nộp kết quả một lượt.
@@ -1002,11 +1036,24 @@ namespace Eleven.UI
             RefreshScoreboard();
         }
 
+        /// <summary>
+        /// Pha phản ứng: CẮT sang cận mặt người sút, hiện một dòng thông báo, hết. Không
+        /// bảng kết quả, không nút bấm — pha này tự hết giờ rồi sang lượt sau ở
+        /// <see cref="OnEnterComplete"/>.
+        /// </summary>
         private void OnEnterReaction()
         {
-            cameraRig?.SetShot(CameraShot.Broadcast, 0.5f);
             cameraRig?.SetBallTracking(false);
-            ShowResultBanner();
+
+            // Chốt chỗ đặt máy theo xương đầu ngay lúc này. Người sút dừng ở đâu là do đà
+            // chạy và độ dạt ngang quyết định, không phải một toạ độ dựng sẵn.
+            Transform head = kicker?.Head;
+            Transform root = kicker?.Root;
+            if (head != null && root != null)
+                cameraRig?.SetKickerFace(head.position, root.forward);
+
+            cameraRig?.SetShot(CameraShot.KickerFace, 0f);
+            ShowResultNotice();
         }
 
         private void OnEnterComplete()
@@ -1015,7 +1062,12 @@ namespace Eleven.UI
             BeginNextKick();
         }
 
-        private void ShowResultBanner()
+        /// <summary>
+        /// Thông báo kết quả cú sút: chữ nổi trên khung cận mặt, KHÔNG hộp và KHÔNG nút.
+        /// Không dùng emoji — cùng lý do như <c>SetCurrentShotInfo</c>: font mặc định của
+        /// IMGUI trên một số máy Android vẽ ra ô vuông.
+        /// </summary>
+        private void ShowResultNotice()
         {
             string typeName = _intent.type switch
             {
@@ -1029,19 +1081,19 @@ namespace Eleven.UI
 
             if (_lastResult == KickResult.Scored)
             {
-                scoreboard?.ShowBanner($"⚽ VÀO! — {who}",
+                scoreboard?.ShowNotice($"VÀO! — {who}",
                     $"{char.ToUpper(typeName[0]) + typeName.Substring(1)} găm thẳng vào lưới.",
-                    new Color(0.20f, 0.95f, 0.35f), _hasReplay);
+                    new Color(0.20f, 0.95f, 0.35f));
             }
             else if (_saveResult == SaveResult.Caught)
             {
-                scoreboard?.ShowBanner($"🧤 BẮT DÍNH! — {who}", "Thủ môn đọc đúng hướng và ôm gọn bóng.",
-                    new Color(1f, 0.55f, 0.15f), _hasReplay);
+                scoreboard?.ShowNotice($"BẮT DÍNH! — {who}", "Thủ môn đọc đúng hướng và ôm gọn bóng.",
+                    new Color(1f, 0.55f, 0.15f));
             }
             else if (_saveResult != SaveResult.Missed)
             {
-                scoreboard?.ShowBanner($"🧤 CẢN PHÁ! — {who}", "Thủ môn chạm tay đẩy bóng ra.",
-                    new Color(1f, 0.55f, 0.15f), _hasReplay);
+                scoreboard?.ShowNotice($"CẢN PHÁ! — {who}", "Thủ môn chạm tay đẩy bóng ra.",
+                    new Color(1f, 0.55f, 0.15f));
             }
             else
             {
@@ -1054,7 +1106,7 @@ namespace Eleven.UI
                     ShotOutcome.Over => "Bóng bay vọt xà.",
                     _ => "Cú sút quá nhẹ, bóng không tới khung thành."
                 };
-                scoreboard?.ShowBanner($"❌ HỎNG ĂN — {who}", reason, new Color(0.95f, 0.25f, 0.25f), _hasReplay);
+                scoreboard?.ShowNotice($"HỎNG ĂN — {who}", reason, new Color(0.95f, 0.25f, 0.25f));
             }
 
             CheckMatchOver();
@@ -1068,11 +1120,14 @@ namespace Eleven.UI
 
             _matchOver = true;
             bool playerWon = winner == 0;
+
+            // Hết loạt sút là chỗ DUY NHẤT còn giữ bảng có nút: trận mới không tự bắt đầu,
+            // bỏ nút đi thì game đứng im ở đây.
+            scoreboard?.HideNotice();
             scoreboard?.ShowBanner(
-                playerWon ? "🏆 BẠN THẮNG LOẠT LUÂN LƯU!" : "😢 BẠN THUA LOẠT LUÂN LƯU",
-                $"Tỷ số chung cuộc {CountScored(true)} — {CountScored(false)}. Bấm LƯỢT TIẾP THEO để chơi trận mới.",
-                playerWon ? new Color(0.2f, 0.95f, 0.35f) : new Color(0.95f, 0.25f, 0.25f),
-                _hasReplay);
+                playerWon ? "BẠN THẮNG LOẠT LUÂN LƯU!" : "BẠN THUA LOẠT LUÂN LƯU",
+                $"Tỷ số chung cuộc {CountScored(true)} — {CountScored(false)}. Bấm TRẬN MỚI để chơi lại.",
+                playerWon ? new Color(0.2f, 0.95f, 0.35f) : new Color(0.95f, 0.25f, 0.25f));
 
             if (playerWon) audioDirector?.PlayCrowdRoar();
         }
@@ -1182,50 +1237,13 @@ namespace Eleven.UI
         }
 
         // ═══════════════════════════════════════════════════════════════════════
-        //  Phát lại (T27)
+        //  Phát lại (T27) — GỠ KHỎI VÒNG LẶP TRẬN ngày 2026-08-28
+        //
+        //  Nút "XEM LẠI" chặn nhịp trận: mỗi cú sút bắt người chơi bấm một lần mới đi
+        //  tiếp. Lớp ReplayPlayer/ReplayKickData VẪN CÒN NGUYÊN trên đĩa (BenchmarkRunner
+        //  và ReplaySystemTests dùng), chỉ có MatchGameLoop thôi gọi tới. Muốn bật lại
+        //  thì dựng lại đúng ba mảnh: nạp ReplayKickData + vận tốc phóng thật, vòng Tick
+        //  riêng, và một lối vào không đứng chắn giữa hai lượt sút.
         // ═══════════════════════════════════════════════════════════════════════
-
-        private void PlayReplay()
-        {
-            if (!_hasReplay) return;
-
-            audioDirector?.PlayUiClick();
-            _replayPlayer ??= new ReplayPlayer();
-
-            // Nạp kèm vận tốc phóng THẬT, nếu không quỹ đạo phát lại sẽ khác quỹ đạo vừa xem.
-            _replayPlayer.LoadWithLaunch(in _lastKickData, _lastLaunchVelocity);
-            _replayPlayer.SetPlaybackSpeed(0.35f);
-            _replayPlayer.Play();
-
-            _replayActive = true;
-            _replayOrbitYaw = -35f;
-
-            _driver?.Freeze();
-            if (ballTrail != null) { ballTrail.Clear(); ballTrail.emitting = true; }
-
-            cameraRig?.SetOrbit(_replayOrbitYaw, 16f, 4.4f, new float3(0f, 1.2f, GoalPlaneZ));
-            cameraRig?.SetShot(CameraShot.ReplayOrbit, 0.4f);
-            scoreboard?.ShowBanner("🎬 XEM LẠI — 0.35x", "Quỹ đạo được dựng lại từ seed, không phải video.",
-                new Color(0.35f, 0.85f, 1f), false);
-        }
-
-        private void TickReplay(float dt)
-        {
-            _replayPlayer.Tick(dt);
-
-            float3 p = _replayPlayer.CurrentBallState.position;
-            if (ballTransform != null) ballTransform.position = (Vector3)p;
-
-            // Máy quay lượn quanh trong giới hạn góc cứng của vùng đã dựng.
-            _replayOrbitYaw = math.min(35f, _replayOrbitYaw + dt * 26f);
-            cameraRig?.SetOrbit(_replayOrbitYaw, 16f, 4.4f, new float3(p.x * 0.5f, math.max(0.8f, p.y), math.min(GoalPlaneZ, p.z + 1.5f)));
-
-            if (!_replayPlayer.IsPlaying || _replayPlayer.HasCompleted)
-            {
-                _replayActive = false;
-                cameraRig?.SetShot(CameraShot.Broadcast, 0.4f);
-                ShowResultBanner();
-            }
-        }
     }
 }

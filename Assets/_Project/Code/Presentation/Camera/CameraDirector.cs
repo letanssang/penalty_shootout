@@ -33,7 +33,8 @@ namespace Eleven.Presentation
         /// <summary>
         /// Thiết lập cấu hình góc máy mặc định cho các pha của lượt sút:
         /// - Pha ngắm và sút (Placing, Aiming, RunUp, Contact, Flight): BehindShooter (góc tĩnh chuẩn).
-        /// - Pha giải quyết & phản ứng (Resolution, Reaction): Broadcast hoặc KeeperPOV.
+        /// - Pha giải quyết (Resolution): Broadcast.
+        /// - Pha phản ứng (Reaction): KickerFace — cận mặt người sút.
         /// - Pha kết thúc (Complete): BehindShooter (chuẩn bị lượt tiếp theo).
         /// </summary>
         public void SetDefaultPhaseBindings()
@@ -44,7 +45,7 @@ namespace Eleven.Presentation
             _phaseBindings[(int)KickPhase.Contact] = CameraShot.BehindShooter;
             _phaseBindings[(int)KickPhase.Flight] = CameraShot.BehindShooter;
             _phaseBindings[(int)KickPhase.Resolution] = CameraShot.Broadcast;
-            _phaseBindings[(int)KickPhase.Reaction] = CameraShot.Broadcast;
+            _phaseBindings[(int)KickPhase.Reaction] = CameraShot.KickerFace;
             _phaseBindings[(int)KickPhase.Complete] = CameraShot.BehindShooter;
         }
 

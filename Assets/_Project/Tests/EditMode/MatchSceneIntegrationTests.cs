@@ -15,6 +15,7 @@ using Eleven.Presentation;
 using Eleven.Presentation.Crowd;
 using Eleven.Presentation.Diagnostics;
 using Eleven.Presentation.Grass;
+using Eleven.Presentation.Kicker;
 using Eleven.Presentation.Net;
 using Eleven.Shooter;
 using Eleven.UI;
@@ -161,6 +162,193 @@ namespace Eleven.Tests.EditMode
             Assert.IsNotNull(cueSource,
                 "Thiếu KickerBoneCueSource — thủ môn không nhận được tín hiệu xương người sút, " +
                 "BayesianKeeperBrain mất dữ liệu đầu vào, thủ môn sẽ đứng im không phản ứng.");
+        }
+
+        /// <summary>
+        /// Phase3: thủ môn trong scene phải là MODEL CÓ XƯƠNG, và hai "găng tay" mà
+        /// GoalkeeperView vươn tới bóng phải là CHÍNH XƯƠNG BÀN TAY của model đó.
+        ///
+        /// Bản trước gắn thêm hai quả cầu xám vào đúng khớp cổ tay: bàn tay thật của model
+        /// chọc xuyên qua chúng, thấy rõ trong khung hình chụp ngày 2026-08-28. Nối thẳng
+        /// vào xương thì lúc TickDive đặt vị trí thế giới lên "găng", bàn tay THẬT bay tới
+        /// đúng điểm SaveResolver đem đi chấm — mắt thấy gì thì máy chấm nấy.
+        ///
+        /// Kèm theo là cờ rootAtFeet: model Mixamo lấy gốc ở gót chân, còn mấy con số bay
+        /// người trong TickDive được chỉnh cho khối capsule gốc giữa thân. Sai cờ này là
+        /// những pha bay thấp cho ra y âm — thủ môn chui xuống dưới mặt cỏ.
+        /// </summary>
+        [Test]
+        public void Phase3_ThuMonLaModelCoXuongVaGangTayLaXuongBanTay()
+        {
+            var keeper = Object.FindFirstObjectByType<GoalkeeperView>();
+            Assert.IsNotNull(keeper, "Thiếu GoalkeeperView — xem Phase3_CoGoalkeeperViewVaKickerBoneCueSource.");
+
+            var animator = keeper.GetComponentInChildren<Animator>();
+            Assert.IsNotNull(animator,
+                "Thủ môn không có Animator — scene đang dùng nhánh greybox khối hộp. " +
+                "Chạy Eleven > Art > Build Keeper Animator Controller rồi dựng lại scene.");
+            Assert.IsNotNull(animator.avatar,
+                "Animator thủ môn thiếu Avatar — không lấy được xương bàn tay.");
+            Assert.IsTrue(animator.avatar.isHuman,
+                "Avatar thủ môn không phải Humanoid — GetBoneTransform trả về null, " +
+                "găng tay tụt về gốc và pha bay người vươn tay sai chỗ.");
+            Assert.IsNotNull(animator.runtimeAnimatorController,
+                "Animator thủ môn chưa gán controller — thủ môn đứng chết ở tư thế T-pose cả lượt chờ.");
+
+            var so = new SerializedObject(keeper);
+            Assert.IsTrue(so.FindProperty("rootAtFeet").boolValue,
+                "rootAtFeet phải bật khi thủ môn là model Mixamo (gốc ở gót chân). " +
+                "Tắt là những pha bay thấp cho ra y âm — thủ môn chui xuống dưới mặt cỏ.");
+
+            var handL = animator.GetBoneTransform(HumanBodyBones.LeftHand);
+            var handR = animator.GetBoneTransform(HumanBodyBones.RightHand);
+            Assert.IsNotNull(handL, "Avatar thủ môn không trả về xương bàn tay trái.");
+            Assert.IsNotNull(handR, "Avatar thủ môn không trả về xương bàn tay phải.");
+
+            Assert.AreEqual(handL, so.FindProperty("leftGlove").objectReferenceValue,
+                "leftGlove không phải xương bàn tay trái — nếu đây là quả cầu gắn thêm thì " +
+                "bàn tay thật sẽ chọc xuyên qua nó, và người chơi thấy hai hòn xám ở cổ tay.");
+            Assert.AreEqual(handR, so.FindProperty("rightGlove").objectReferenceValue,
+                "rightGlove không phải xương bàn tay phải — xem lý do ở dòng trên.");
+        }
+
+        /// <summary>
+        /// Phase3: thủ môn phải có ĐỦ CHÍN clip bay người — mỗi ô lưới khung thành một clip —
+        /// và bộ ghim tay IK phải ngồi đúng chỗ.
+        ///
+        /// Trước 2026-08-28 controller chỉ có mỗi state "Idle" và pha bay người là code lái
+        /// thân người trần trụi sau khi TẮT Animator: thủ môn trượt ngang như tủ lạnh rồi
+        /// đứng hình ở tư thế cuối cho tới hết lượt, không bao giờ đứng dậy. Test này đỏ
+        /// nghĩa là đã tụt lại về đúng trạng thái đó.
+        ///
+        /// Ba điều kiện, mất một là hỏng theo ba kiểu khác nhau:
+        ///  • Thiếu state Dive{ô}: GoalkeeperView không phát được clip, thủ môn đứng chờ suốt
+        ///    trong lúc thân người vẫn trượt đi — tệ hơn cả bản cũ.
+        ///  • Thiếu IK Pass trên tầng 0: Unity KHÔNG gọi OnAnimatorIK, im lặng, không báo lỗi.
+        ///    Bàn tay đi theo clip diễn viên chứ không theo KeeperReach, và người chơi thấy
+        ///    tay chạm bóng trong khi máy báo thủng lưới.
+        ///  • Thiếu KeeperHandIK cạnh Animator: y hệt trên, cũng im lặng.
+        /// </summary>
+        [Test]
+        public void Phase3_ThuMonCoDuChinClipBayNguoiVaGhimTayBangIK()
+        {
+            var keeper = Object.FindFirstObjectByType<GoalkeeperView>();
+            Assert.IsNotNull(keeper, "Thiếu GoalkeeperView — xem Phase3_CoGoalkeeperViewVaKickerBoneCueSource.");
+
+            var animator = keeper.GetComponentInChildren<Animator>();
+            Assert.IsNotNull(animator, "Thủ môn không có Animator — xem Phase3_ThuMonLaModelCoXuongVaGangTayLaXuongBanTay.");
+
+            var controller = animator.runtimeAnimatorController as UnityEditor.Animations.AnimatorController;
+            Assert.IsNotNull(controller,
+                "Controller thủ môn không phải AnimatorController dựng sẵn — " +
+                "chạy Eleven > Art > Build Keeper Animator Controller.");
+
+            Assert.IsTrue(controller.layers[0].iKPass,
+                "Tầng 0 của controller thủ môn chưa bật IK Pass. Unity sẽ không gọi OnAnimatorIK " +
+                "và không báo lỗi gì cả — bàn tay lặng lẽ đi theo clip thay vì theo KeeperReach.");
+
+            var states = controller.layers[0].stateMachine.states;
+            for (int cell = 0; cell < 9; cell++)
+            {
+                string want = "Dive" + cell;
+                bool found = false;
+                foreach (var st in states)
+                {
+                    if (st.state.name != want) continue;
+                    found = true;
+                    Assert.IsNotNull(st.state.motion,
+                        $"State {want} tồn tại nhưng không gắn clip nào — thủ môn sẽ đứng hình ở ô {cell}.");
+                    break;
+                }
+                Assert.IsTrue(found,
+                    $"Controller thủ môn thiếu state {want} — không có clip bay người cho ô {cell}. " +
+                    "GoalkeeperView gọi state theo tên này.");
+            }
+
+            var ik = animator.GetComponent<KeeperHandIK>();
+            Assert.IsNotNull(ik,
+                "KeeperHandIK không nằm CÙNG GameObject với Animator. Unity chỉ gọi OnAnimatorIK " +
+                "trên component ngồi cạnh Animator; gắn lên node cha là nó không chạy, im lặng.");
+
+            Assert.IsNotNull(keeper.CatchHand,
+                "GoalkeeperView.CatchHand null — không có xương bàn tay nào để quả bóng bắt " +
+                "dính bám vào, pha bắt bóng sẽ lùi về nhánh làm rơi bóng xuống cỏ.");
+
+            var so2 = new SerializedObject(keeper);
+            Assert.AreEqual(ik, so2.FindProperty("handIK").objectReferenceValue,
+                "GoalkeeperView.handIK chưa nối tới KeeperHandIK của model — pha bay người sẽ " +
+                "rơi về nhánh đặt thẳng transform lên xương, thứ bị Animator ghi đè ngay khung sau.");
+        }
+
+        /// <summary>
+        /// Clip của mỗi ô phải ĐỔ NGƯỜI CÙNG BÊN với ô đó trên khung thành.
+        ///
+        /// Bản 2026-08-28 sai đúng chỗ này: thân thủ môn trượt sang phía bóng (code lo, theo
+        /// KeeperReach) nhưng clip lại quăng người về bên kia, nên trên máy thật thấy thủ môn
+        /// ngã ngửa, chân đi trước bóng. Máy vẫn chấm đúng vì tay được ghim bằng IK — nghĩa là
+        /// KHÔNG một test nào khác bắt được lỗi này, chỉ có mắt người.
+        ///
+        /// Đo bằng cách lấy mẫu clip thật rồi đọc x của hông ở khung hông xuống thấp nhất,
+        /// sau khi đã xoay model 180 độ đúng như thủ môn đứng trong scene. Ba ô giữa (1, 4, 7)
+        /// bỏ qua: chúng vốn không nghiêng về bên nào.
+        /// </summary>
+        [Test]
+        public void NgaDungBenVoiOLuoi()
+        {
+            var keeper = Object.FindFirstObjectByType<GoalkeeperView>();
+            Assert.IsNotNull(keeper, "Thiếu GoalkeeperView — xem Phase3_CoGoalkeeperViewVaKickerBoneCueSource.");
+
+            var animator = keeper.GetComponentInChildren<Animator>();
+            var controller = animator != null
+                ? animator.runtimeAnimatorController as UnityEditor.Animations.AnimatorController
+                : null;
+            Assert.IsNotNull(controller, "Không lấy được AnimatorController thủ môn.");
+
+            // Bản sao rời để lấy mẫu: SampleAnimation ghi thẳng lên transform, đụng vào model
+            // trong scene là hỏng scene đang mở.
+            var probe = Object.Instantiate(animator.gameObject);
+            probe.transform.position = Vector3.zero;
+            probe.transform.rotation = Quaternion.Euler(0f, 180f, 0f);   // đúng tư thế đứng chờ
+
+            var probeAnimator = probe.GetComponent<Animator>();
+            Transform hips = probeAnimator.GetBoneTransform(HumanBodyBones.Hips);
+            Assert.IsNotNull(hips, "Model thủ môn thiếu xương Hips.");
+
+            var states = controller.layers[0].stateMachine.states;
+
+            try
+            {
+                for (int cell = 0; cell < 9; cell++)
+                {
+                    if (cell % 3 == 1) continue;   // cột giữa: không có bên nào để so
+
+                    AnimationClip clip = null;
+                    foreach (var st in states)
+                        if (st.state.name == "Dive" + cell) clip = st.state.motion as AnimationClip;
+
+                    Assert.IsNotNull(clip, $"State Dive{cell} không gắn AnimationClip.");
+
+                    float lowest = float.MaxValue, hipX = 0f;
+                    for (int i = 0; i < 40; i++)
+                    {
+                        clip.SampleAnimation(probe, clip.length * i / 39f);
+                        Vector3 h = hips.position;
+                        if (h.y < lowest) { lowest = h.y; hipX = h.x; }
+                    }
+
+                    float wantSign = Mathf.Sign(GoalFrame.CellCenter(cell).x);
+                    Assert.Greater(hipX * wantSign, 0f,
+                        $"Ô {cell} nằm bên x={GoalFrame.CellCenter(cell).x:F2} nhưng clip " +
+                        $"'{clip.name}' đổ người sang x={hipX:F2} — ngược bên. Thủ môn sẽ trượt " +
+                        "theo bóng mà ngã về phía đối diện. Đo lại bằng Eleven ▸ Art ▸ " +
+                        "Đo Bên Đổ Người Của Thủ Môn rồi sửa CellClips trong " +
+                        "KeeperAnimatorControllerBuilder.");
+                }
+            }
+            finally
+            {
+                Object.DestroyImmediate(probe);
+            }
         }
 
         // ════════════════════════════════════════════════════════════════════════
@@ -339,54 +527,64 @@ namespace Eleven.Tests.EditMode
         // ════════════════════════════════════════════════════════════════════════
 
         /// <summary>
-        /// Kiểm tra cột dọc và xà ngang có đúng số liệu IFAB (từ GoalFrame).
-        /// MatchSceneGenerator đặt tên: "LeftPost", "RightPost", "Crossbar".
-        /// Sai số ±2cm — đủ nghiêm ngặt để phát hiện gõ nhầm số.
+        /// Kiểm tra khung thành NHÌN THẤY có đúng số liệu IFAB (từ GoalFrame).
+        ///
+        /// Trước đây test này dò ba GameObject tên "LeftPost"/"RightPost"/"Crossbar" — tên do
+        /// MatchSceneGenerator tự đặt hồi khung thành còn là primitive. Từ khi khung thành là
+        /// model thật, tên các node bên trong FBX thuộc về người dựng model, không thuộc về
+        /// dự án này, và bám vào chúng là bám vào thứ mình không kiểm soát.
+        ///
+        /// Nên chỗ này đo HÌNH HỌC chứ không đọc tên: gộp hộp bao của mọi renderer nằm trên
+        /// mặt phẳng vạch vôi z = GoalZ, rồi so mép ngoài với GoalFrame. Cách đo này đúng cho
+        /// cả bản model lẫn bản greybox dự phòng, và nó chính là thứ cần bảo vệ: cái mắt thấy
+        /// phải trùng cái GoalGeometry.Classify tính.
         /// </summary>
         [Test]
         public void KhungThanh_DungSoLieuIFAB()
         {
-            // Tìm theo tên — MatchSceneGenerator.BuildGoal đặt tên cố định
-            GameObject leftPost  = GameObject.Find("LeftPost");
-            GameObject rightPost = GameObject.Find("RightPost");
-            GameObject crossbar  = GameObject.Find("Crossbar");
-
-            Assert.IsNotNull(leftPost,
-                "Không tìm thấy GameObject 'LeftPost' — khung thành không được dựng, " +
+            var goal = GameObject.Find("Environment/Goal");
+            Assert.IsNotNull(goal,
+                "Không tìm thấy Environment/Goal — khung thành không được dựng, " +
                 "GoalGeometry.Classify sẽ không có vật thể để phân loại vào/trượt.");
-            Assert.IsNotNull(rightPost,
-                "Không tìm thấy GameObject 'RightPost' — cột phải bị thiếu, " +
-                "cú sút cột phải sẽ phán sai kết quả hình học.");
-            Assert.IsNotNull(crossbar,
-                "Không tìm thấy GameObject 'Crossbar' — xà ngang bị thiếu, " +
-                "cú sút dội xà sẽ không có vật thể để bật lại.");
 
-            Vector3 lp = leftPost.transform.position;
-            Vector3 rp = rightPost.transform.position;
-            Vector3 cb = crossbar.transform.position;
+            bool found = false;
+            Bounds frame = default;
 
-            // Cột trái: x = -PostX, z = GoalZ
-            Assert.AreEqual(-PostX, lp.x, PosEps,
-                $"LeftPost.x = {lp.x:F3}m, cần {-PostX}m — cột trái sai vị trí ngang, " +
+            foreach (var r in goal.GetComponentsInChildren<MeshRenderer>(true))
+            {
+                // Lưới Verlet sinh mesh lúc chạy nên trong Editor nó rỗng ở gốc toạ độ;
+                // gộp vào thì hộp bao kéo về (0,0,0) và mọi phép đo dưới đây sai hết.
+                if (r.bounds.size == Vector3.zero) continue;
+
+                // Chỉ lấy phần nằm trên vạch vôi: khung. Cột chống hậu (z ≈ 12.8) và dây néo
+                // không phải khung thành, chúng không tham gia phán vào/trượt.
+                if (r.bounds.min.z > GoalZ || r.bounds.max.z < GoalZ) continue;
+
+                if (!found) { frame = r.bounds; found = true; }
+                else frame.Encapsulate(r.bounds);
+            }
+
+            Assert.IsTrue(found,
+                $"Không có renderer nào của Environment/Goal cắt mặt phẳng z = {GoalZ}m — " +
+                "khung thành không nằm trên vạch vôi, hoặc chưa được dựng.");
+
+            // Mép NGOÀI của cột: tâm cột ± bán kính. Đây là con số mắt nhìn thấy;
+            // mép trong (±GoalFrame.Width/2) mới là con số bộ phân loại dùng.
+            float outerX = PostX + GoalFrame.PostRadius;   // 3.78
+            float outerY = BarY + GoalFrame.PostRadius;    // 2.56
+
+            Assert.AreEqual(-outerX, frame.min.x, PosEps,
+                $"Mép ngoài cột trái ở x = {frame.min.x:F3}m, cần {-outerX}m — " +
                 "chiều rộng khung thành không đúng 7.32m IFAB.");
-            Assert.AreEqual(GoalZ, lp.z, PosEps,
-                $"LeftPost.z = {lp.z:F3}m, cần {GoalZ}m — cột trái không nằm trên vạch vôi, " +
-                "vị trí cầu môn lệch khỏi chấm phạt đền 11m.");
-
-            // Cột phải: x = +PostX, z = GoalZ
-            Assert.AreEqual(PostX, rp.x, PosEps,
-                $"RightPost.x = {rp.x:F3}m, cần {PostX}m — cột phải sai vị trí ngang, " +
+            Assert.AreEqual(outerX, frame.max.x, PosEps,
+                $"Mép ngoài cột phải ở x = {frame.max.x:F3}m, cần {outerX}m — " +
                 "chiều rộng khung thành không đúng 7.32m IFAB.");
-            Assert.AreEqual(GoalZ, rp.z, PosEps,
-                $"RightPost.z = {rp.z:F3}m, cần {GoalZ}m — cột phải không nằm trên vạch vôi.");
-
-            // Xà ngang: y = BarY, z = GoalZ
-            Assert.AreEqual(BarY, cb.y, PosEps,
-                $"Crossbar.y = {cb.y:F3}m, cần {BarY}m — xà ngang sai độ cao, " +
+            Assert.AreEqual(outerY, frame.max.y, PosEps,
+                $"Mép trên xà ngang ở y = {frame.max.y:F3}m, cần {outerY}m — " +
                 "cú sút dội xà vào/ra ngoài sẽ phán sai, không đúng chiều cao 2.44m IFAB.");
-            Assert.AreEqual(GoalZ, cb.z, PosEps,
-                $"Crossbar.z = {cb.z:F3}m, cần {GoalZ}m — xà ngang không nằm trên vạch vôi, " +
-                "toàn bộ hình học khung thành bị lệch theo chiều sâu.");
+            Assert.AreEqual(GoalZ, frame.center.z, PosEps,
+                $"Tâm khung thành ở z = {frame.center.z:F3}m, cần {GoalZ}m — " +
+                "cầu môn lệch khỏi chấm phạt đền 11m.");
         }
 
         // ════════════════════════════════════════════════════════════════════════
@@ -430,6 +628,61 @@ namespace Eleven.Tests.EditMode
                 $"Không tìm thấy trường '{fieldName}' trong {so.targetObject.GetType().Name} — " +
                 "có thể tên trường đã đổi, cần cập nhật test.");
             Assert.IsNotNull(prop.objectReferenceValue, messageIfNull);
+        }
+
+        /// <summary>
+        /// Người sút trong scene phải là model CÓ DA CÓ THỊT: đủ xương Humanoid cho
+        /// MecanimKickerAnimator, và MỌI vật liệu phải có ảnh nền.
+        ///
+        /// Vế thứ hai không thừa. Ngày 2026-08-28 model Ch38 nhập vào trông hoàn toàn bình
+        /// thường trong mọi bảng kiểm — avatar hợp lệ, đủ xương, đúng chiều cao — nhưng ảnh
+        /// nằm nhúng trong FBX với đường dẫn trỏ về máy dựng của Mixamo, nên Unity dựng vật
+        /// liệu rỗng mà không hề báo lỗi. Ra màn hình là một người trắng bệch. Không có máy
+        /// gác chỗ này thì lỗi đó chỉ lộ ra khi đã cài xong lên điện thoại.
+        /// </summary>
+        [Test]
+        public void NguoiSutLaModelCoXuongVaCoTexture()
+        {
+            var kicker = Object.FindFirstObjectByType<MecanimKickerAnimator>();
+            Assert.IsNotNull(kicker,
+                "Không thấy MecanimKickerAnimator trong scene — người sút đã tụt về greybox, " +
+                "nghĩa là thiếu model, thiếu controller, hoặc Avatar không phải Humanoid.");
+
+            var animator = kicker.GetComponent<Animator>();
+            Assert.IsNotNull(animator, "Người sút thiếu Animator.");
+            Assert.IsTrue(animator.isHuman,
+                "Avatar người sút không phải Humanoid — Mecanim không khớp lại được thư viện " +
+                "clip Mixamo, mọi cú sút sẽ đứng hình ở tư thế T.");
+
+            foreach (HumanBodyBones bone in new[]
+                     {
+                         HumanBodyBones.Hips, HumanBodyBones.LeftFoot,
+                         HumanBodyBones.RightFoot, HumanBodyBones.Head,
+                     })
+            {
+                Assert.IsNotNull(animator.GetBoneTransform(bone),
+                    $"Avatar người sút thiếu xương {bone} — MecanimKickerAnimator đọc thẳng " +
+                    "xương này để tính khung chạm bóng và góc máy cận mặt.");
+            }
+
+            var renderers = kicker.GetComponentsInChildren<Renderer>(true);
+            Assert.Greater(renderers.Length, 0, "Người sút không có Renderer nào — không nhìn thấy gì.");
+
+            foreach (Renderer r in renderers)
+            {
+                foreach (Material m in r.sharedMaterials)
+                {
+                    Assert.IsNotNull(m, $"Renderer '{r.name}' của người sút có ô vật liệu trống.");
+
+                    Texture baseMap = m.HasProperty("_BaseMap") ? m.GetTexture("_BaseMap") : null;
+                    if (baseMap == null && m.HasProperty("_MainTex")) baseMap = m.GetTexture("_MainTex");
+
+                    Assert.IsNotNull(baseMap,
+                        $"Vật liệu '{m.name}' của người sút không có ảnh nền — model sẽ ra màn " +
+                        "hình trắng trơn. Chạy Eleven ▸ Art ▸ Rút Texture Nhúng Của Nhân Vật " +
+                        "rồi nhập lại FBX.");
+                }
+            }
         }
     }
 }

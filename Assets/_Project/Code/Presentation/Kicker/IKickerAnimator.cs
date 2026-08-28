@@ -58,6 +58,13 @@ namespace Eleven.Presentation.Kicker
         Transform Root { get; }
         Transform Hips { get; }
 
+        /// <summary>
+        /// Đầu. Máy quay cận mặt ở pha phản ứng lấy chỗ đặt máy từ đây — không phải từ một
+        /// toạ độ dựng sẵn, vì người sút dừng ở đâu là do đà chạy và độ dạt ngang quyết định.
+        /// Có thể null khi model chưa gán xương; người gọi phải chịu được điều đó.
+        /// </summary>
+        Transform Head { get; }
+
         /// <summary>Chân trụ — chân KHÔNG sút. <c>KickerBoneCueSource</c> đọc nó mỗi khung.</summary>
         Transform PlantFoot { get; }
 

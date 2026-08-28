@@ -48,6 +48,12 @@ namespace Eleven.Presentation
         private float _orbitDistance = 4.2f;
         private float3 _orbitCenter = new float3(0f, 1.22f, 11.0f);
 
+        // Góc cận mặt người sút, CHỐT CỨNG tại khoảnh khắc cắt cảnh — xem SetKickerFace.
+        // Mặc định nhắm vào chỗ chân trụ đặt xuống, để góc này vẫn dùng được khi chưa ai
+        // gọi SetKickerFace (model chưa gán, hoặc xương đầu không lấy được).
+        private float3 _faceEye = new float3(0.20f, 1.75f, 1.20f);
+        private float3 _faceTarget = new float3(-0.35f, 1.65f, -0.15f);
+
         public CameraDirector Director => _director;
         public CameraShot CurrentShot => _director != null ? _director.CurrentShot : CameraShot.BehindShooter;
 
@@ -101,6 +107,36 @@ namespace Eleven.Presentation
             if (CurrentShot == CameraShot.ReplayOrbit)
             {
                 _to = PoseFor(CameraShot.ReplayOrbit);
+            }
+        }
+
+        /// <summary>
+        /// Dựng góc cận mặt người sút từ vị trí ĐẦU THẬT và hướng người đang quay.
+        ///
+        /// Chốt một lần rồi đứng yên, KHÔNG bám đầu mỗi khung hình. Máy bám theo một cái đầu
+        /// đang ăn mừng thì khung hình rung theo hoạt ảnh — trông như quay bằng tay chứ không
+        /// như một cú cắt cảnh. Đứng yên thì đầu người tự chạy trong khung, đúng kiểu máy cận
+        /// đặt sẵn trên sân.
+        ///
+        /// Máy đặt TRƯỚC MẶT (phía khung thành) nên nhìn ngược về phía người sút; chếch sang
+        /// bên 0.55m để thành góc 3/4 chứ không phải ảnh thẻ, và nhích lên 0.08m cho ngang
+        /// tầm mắt. Cách 1.46m với fov 26° cho khung cao 0.67m — vừa đủ đầu và vai.
+        /// </summary>
+        public void SetKickerFace(float3 headWorldPosition, float3 facingDirection)
+        {
+            float3 fwd = new float3(facingDirection.x, 0f, facingDirection.z);
+            fwd = math.lengthsq(fwd) > 1e-6f ? math.normalize(fwd) : new float3(0f, 0f, 1f);
+            float3 right = math.cross(new float3(0f, 1f, 0f), fwd);
+
+            _faceTarget = headWorldPosition;
+            _faceEye = headWorldPosition + fwd * 1.35f + right * 0.55f + new float3(0f, 0.08f, 0f);
+
+            // Gọi giữa lúc đang ở góc này thì áp ngay, nếu không tư thế mới phải đợi cú cắt sau.
+            if (CurrentShot == CameraShot.KickerFace)
+            {
+                _to = PoseFor(CameraShot.KickerFace);
+                _from = _to;
+                Apply(_to);
             }
         }
 
@@ -211,6 +247,12 @@ namespace Eleven.Presentation
                     p.position = CameraAuthoredBounds.ComputeOrbitPosition(_orbitYaw, _orbitPitch, _orbitDistance, _orbitCenter);
                     p.lookAt = _orbitCenter;
                     p.fov = 44f;
+                    break;
+
+                case CameraShot.KickerFace:
+                    p.position = _faceEye;
+                    p.lookAt = _faceTarget;
+                    p.fov = 26f;
                     break;
 
                 case CameraShot.BehindShooter:

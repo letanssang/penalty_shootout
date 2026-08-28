@@ -14,7 +14,6 @@ namespace Eleven.UI
     public sealed class ScoreboardUI : MonoBehaviour
     {
         // ─── SỰ KIỆN CÔNG KHAI ───────────────────────────────────────────────────
-        public event Action OnReplayClicked;
         public event Action OnNextKickClicked;
         public event Action<DifficultyLevel> OnDifficultyChanged;
 
@@ -37,12 +36,19 @@ namespace Eleven.UI
         private float  _cachedSpeedKmh = -1f;
         private string _cachedSpeedStr  = "";
 
-        // Banner kết quả
+        // Banner kết thúc trận — CHỈ dùng cho lúc hết loạt sút, vì đó là chỗ duy nhất
+        // còn cần một nút bấm (trận mới không tự bắt đầu). Kết quả từng cú sút đi qua
+        // dòng thông báo bên dưới.
         private string _bannerTitle    = "";
         private string _bannerSubtitle = "";
         private Color  _bannerColor    = Color.white;
         private bool   _showBanner;
-        private bool   _replayAvailable;
+
+        // Thông báo kết quả cú sút — chữ nổi trên khung hình phản ứng, không hộp, không nút.
+        private string _noticeTitle    = "";
+        private string _noticeSubtitle = "";
+        private Color  _noticeColor    = Color.white;
+        private bool   _showNotice;
 
         // Nhắc thao tác giữa-dưới màn hình
         private string _promptText = "";
@@ -95,6 +101,8 @@ namespace Eleven.UI
         private GUIStyle   _styleBannerTitle;
         private GUIStyle   _styleBannerSub;
         private GUIStyle   _styleBannerBtn;
+        private GUIStyle   _styleNoticeTitle;
+        private GUIStyle   _styleNoticeSub;
         private GUIStyle   _styleTurnBand;
         private GUIStyle   _styleGradeLabel;
         private GUIStyle   _stylePrompt;
@@ -201,20 +209,40 @@ namespace Eleven.UI
             _showShotBadge = false;
         }
 
-        /// <summary>Hiện banner kết quả với hai nút hành động.</summary>
-        public void ShowBanner(string title, string subtitle, Color color, bool replayAvailable = true)
+        /// <summary>
+        /// Hiện banner kết thúc trận kèm nút "LUOT TIEP THEO". Chỉ gọi khi loạt sút đã xong —
+        /// kết quả từng cú sút dùng <see cref="ShowNotice"/> để trận chạy liền mạch.
+        /// </summary>
+        public void ShowBanner(string title, string subtitle, Color color)
         {
             _bannerTitle     = title    ?? "";
             _bannerSubtitle  = subtitle ?? "";
             _bannerColor     = color;
             _showBanner      = true;
-            _replayAvailable = replayAvailable;
         }
 
-        /// <summary>Ẩn banner kết quả.</summary>
+        /// <summary>Ẩn banner kết thúc trận.</summary>
         public void HideBanner()
         {
             _showBanner = false;
+        }
+
+        /// <summary>
+        /// Hiện thông báo kết quả cú sút: chữ nổi trên khung hình, không hộp nền và không nút.
+        /// Người chơi không phải bấm gì — trận tự sang lượt tiếp theo.
+        /// </summary>
+        public void ShowNotice(string title, string subtitle, Color color)
+        {
+            _noticeTitle    = title    ?? "";
+            _noticeSubtitle = subtitle ?? "";
+            _noticeColor    = color;
+            _showNotice     = true;
+        }
+
+        /// <summary>Ẩn thông báo kết quả cú sút.</summary>
+        public void HideNotice()
+        {
+            _showNotice = false;
         }
 
         /// <summary>Dòng nhắc thao tác giữa-dưới màn hình; chuỗi rỗng = ẩn.</summary>
@@ -292,6 +320,9 @@ namespace Eleven.UI
 
             if (!string.IsNullOrEmpty(_promptText))
                 DrawPrompt(scale);
+
+            if (_showNotice)
+                DrawNotice(scale);
 
             if (_showBanner)
                 DrawBanner(scale);
@@ -537,7 +568,42 @@ namespace Eleven.UI
             GUI.Label(new Rect(x, y, w, h), _promptText, _stylePrompt);
         }
 
-        // ─── BANNER KẾT QUẢ ──────────────────────────────────────────────────────
+        // ─── THÔNG BÁO KẾT QUẢ CÚ SÚT ────────────────────────────────────────────
+        //
+        // Không hộp nền: khung hình lúc này là cận mặt người sút, che nó bằng một tấm
+        // đen là vứt đi đúng thứ vừa cắt sang để xem. Đọc được nhờ viền chữ đổ bóng bốn
+        // hướng — rẻ hơn nhiều so với dựng outline shader cho IMGUI.
+        private void DrawNotice(float scale)
+        {
+            float w = Mathf.Min(720f * scale, Screen.width - 24f * scale);
+            float x = (Screen.width - w) * 0.5f;
+            float y = Screen.height * 0.13f;
+
+            var rectTitle = new Rect(x, y, w, 52f * scale);
+            var rectSub   = new Rect(x, y + 50f * scale, w, 34f * scale);
+
+            DrawTextWithShadow(rectTitle, _noticeTitle, _styleNoticeTitle, _noticeColor, scale);
+            if (!string.IsNullOrEmpty(_noticeSubtitle))
+                DrawTextWithShadow(rectSub, _noticeSubtitle, _styleNoticeSub,
+                                   new Color(0.92f, 0.95f, 1.00f), scale);
+        }
+
+        /// <summary>Vẽ chữ có viền tối bốn hướng để nổi trên mọi nền sân.</summary>
+        private void DrawTextWithShadow(Rect rect, string text, GUIStyle style, Color color, float scale)
+        {
+            float o = Mathf.Max(1f, 2f * scale);
+
+            style.normal.textColor = new Color(0f, 0f, 0f, 0.85f);
+            GUI.Label(new Rect(rect.x - o, rect.y,     rect.width, rect.height), text, style);
+            GUI.Label(new Rect(rect.x + o, rect.y,     rect.width, rect.height), text, style);
+            GUI.Label(new Rect(rect.x,     rect.y - o, rect.width, rect.height), text, style);
+            GUI.Label(new Rect(rect.x,     rect.y + o, rect.width, rect.height), text, style);
+
+            style.normal.textColor = color;
+            GUI.Label(rect, text, style);
+        }
+
+        // ─── BANNER KẾT THÚC TRẬN ────────────────────────────────────────────────
         private void DrawBanner(float scale)
         {
             float bannerW = Mathf.Min(680f * scale, Screen.width - 24f * scale);
@@ -562,22 +628,10 @@ namespace Eleven.UI
             float btnW = 160f * scale;
             float btnY = bannerY + bannerH - btnH - 16f * scale;
 
-            if (_replayAvailable)
-            {
-                float replayX = bannerX + bannerW * 0.5f - btnW - 8f * scale;
-                if (GUI.Button(new Rect(replayX, btnY, btnW, btnH), "XEM LAI", _styleBannerBtn))
-                    OnReplayClicked?.Invoke();
-            }
+            // Chỉ còn một nút — căn giữa banner.
+            float nextX = bannerX + (bannerW - btnW) * 0.5f;
 
-            float nextX = _replayAvailable
-                ? bannerX + bannerW * 0.5f + 8f * scale
-                : (bannerX + bannerW - btnW) * 0.5f + bannerX * 0f; // căn giữa khi chỉ có 1 nút
-
-            // Khi chỉ có nút "TIEP THEO", căn giữa trong banner
-            if (!_replayAvailable)
-                nextX = bannerX + (bannerW - btnW) * 0.5f;
-
-            if (GUI.Button(new Rect(nextX, btnY, btnW, btnH), "LUOT TIEP THEO", _styleBannerBtn))
+            if (GUI.Button(new Rect(nextX, btnY, btnW, btnH), "TRAN MOI", _styleBannerBtn))
                 OnNextKickClicked?.Invoke();
         }
 
@@ -618,6 +672,13 @@ namespace Eleven.UI
                                          Color.white, scale);
 
             _styleBannerBtn  = BuildBtnStyle(16, scale, _texBtnNormal, _texBtnActive);
+
+            // Thông báo cú sút: to hơn banner một bậc vì không có hộp nền đỡ mắt.
+            _styleNoticeTitle = NewLabel(32, FontStyle.Bold, TextAnchor.UpperCenter,
+                                         Color.white, scale); // màu ghi đè khi vẽ
+
+            _styleNoticeSub   = NewLabel(16, FontStyle.Bold, TextAnchor.UpperCenter,
+                                         Color.white, scale); // màu ghi đè khi vẽ
 
             _styleTurnBand   = NewLabel(13, FontStyle.Bold, TextAnchor.MiddleLeft,
                                          new Color(0.85f, 0.92f, 1.00f), scale);

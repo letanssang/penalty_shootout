@@ -29,6 +29,46 @@ namespace Eleven.Editor.Tools
         /// <summary>Nhân vật T-pose tải từ tab Characters của Mixamo (X Bot / Y Bot đều được).</summary>
         public const string CharacterDir = "Assets/_Project/Art/Characters";
 
+        /// <summary>Thư mục texture của nhân vật (base color / normal), do bên này áp luật import.</summary>
+        public const string CharacterTextureDir = CharacterDir + "/Textures/";
+
+        /// <summary>
+        /// Model thủ môn (Maya, bộ xương đặt tên y hệt Mixamo nên Humanoid tự khớp được).
+        /// Vật liệu do <c>PropModelLibrary</c> dựng chứ không để importer tự sinh — xem
+        /// <see cref="OnPreprocessModel"/>.
+        /// </summary>
+        public const string KeeperCharacter = CharacterDir + "/Goalkeeper.fbx";
+
+        /// <summary>
+        /// Chiều cao model thủ môn khi nhập với globalScale = 1, đo bằng
+        /// <see cref="PropModelReport"/> ngày 2026-08-28: hộp bao (0.142, 0.152, 0.030)m.
+        /// FBX do Maya xuất, đơn vị trong file nhỏ hơn mét chừng 12 lần.
+        /// </summary>
+        const float KeeperImportedHeight = 0.152f;
+
+        /// <summary>Chiều cao thủ môn muốn có (m). Thủ môn chuyên nghiệp cao 1.85–1.95m.</summary>
+        public const float KeeperHeight = 1.85f;
+
+        /// <summary>
+        /// Co giãn NGAY LÚC IMPORT chứ không bằng localScale ở scene, cùng lý do như quả bóng:
+        /// mesh nằm sẵn trong bộ nhớ ở đúng cỡ thật, và mọi thứ gắn vào nó về sau (găng tay,
+        /// hiệu ứng) không bị nhân theo một hệ số vô hình.
+        /// </summary>
+        public const float KeeperImportScale = KeeperHeight / KeeperImportedHeight;
+
+        /// <summary>
+        /// Nhân vật giữ vai Avatar gốc cho TOÀN BỘ clip Mixamo. Ghim cứng vào X Bot chứ không
+        /// lấy "file .fbx đầu tiên trong thư mục" như trước: từ 2026-08-28 thư mục có thêm
+        /// Goalkeeper.fbx, mà xếp theo bảng mã thì "G" đứng trước "X" — để nguyên luật cũ là
+        /// cả bộ clip lặng lẽ đổi sang khớp xương thủ môn, và những khung chạm bóng đo được
+        /// của T35 (sai số dưới một khung ở 60fps) không còn đúng nữa.
+        ///
+        /// Từ 2026-08-28 nó KHÔNG còn là model người sút nhìn thấy trên sân — chỗ đó là
+        /// Kicker.fbx (Ch38), xem MatchSceneGenerator.KickerModelPath. Hai vai đã tách: X Bot
+        /// giữ vai bộ xương chuẩn cho clip, Ch38 giữ vai phần nhìn.
+        /// </summary>
+        public const string KickerCharacter = CharacterDir + "/XBot.fbx";
+
         /// <summary>
         /// Nguồn dự phòng khi thư mục Characters còn trống: clip đứng yên, tư thế khung 0 gần
         /// trung tính nhất trong gói. Chỉ là chỗ đứng tạm cho tới khi có nhân vật thật.
@@ -44,6 +84,8 @@ namespace Eleven.Editor.Tools
         {
             get
             {
+                if (File.Exists(KickerCharacter)) return KickerCharacter;
+
                 if (Directory.Exists(CharacterDir))
                 {
                     var fbx = Directory.GetFiles(CharacterDir, "*.fbx", SearchOption.TopDirectoryOnly);
@@ -56,6 +98,13 @@ namespace Eleven.Editor.Tools
                 return FallbackAvatarSource;
             }
         }
+
+        /// <summary>
+        /// Tăng số này mỗi lần sửa luật import ở dưới, để Unity nhập lại các asset đã nhập
+        /// theo luật cũ. Không có nó thì sửa code xong asset vẫn giữ thiết lập cũ cho tới khi
+        /// có người bấm Reimport bằng tay — và cái sai đó chỉ lộ ra trên máy người khác.
+        /// </summary>
+        public override uint GetVersion() => 2;
 
         static bool IsCharacter(string path) =>
             path.StartsWith(CharacterDir) && path.EndsWith(".fbx", System.StringComparison.OrdinalIgnoreCase);
@@ -73,6 +122,18 @@ namespace Eleven.Editor.Tools
                 character.optimizeGameObjects = false;
                 character.importCameras   = false;
                 character.importLights    = false;
+
+                if (assetPath == KeeperCharacter)
+                {
+                    // FBX thủ môn trỏ texture bằng đường dẫn tuyệt đối trên máy người dựng
+                    // ("D:/Working file/..."), nên importer chỉ đẻ ra một material rỗng rồi
+                    // đè lại mỗi lần reimport. Tự dựng vật liệu URP Lit ở PropModelLibrary
+                    // và gán lúc dựng scene thì mới kiểm soát được.
+                    character.materialImportMode = ModelImporterMaterialImportMode.None;
+                    character.importAnimation = false;   // tư thế T-pose, clip lấy từ Mixamo
+                    character.useFileScale = true;
+                    character.globalScale = KeeperImportScale;
+                }
                 return;
             }
 
@@ -116,6 +177,33 @@ namespace Eleven.Editor.Tools
                 // Avatar gốc chưa import xong (thứ tự import của Unity không đảm bảo).
                 // Tự dựng tạm; MixamoAnimationReport.Run sẽ import lại đúng thứ tự.
                 importer.avatarSetup = ModelImporterAvatarSetup.CreateFromThisModel;
+            }
+        }
+
+        void OnPreprocessTexture()
+        {
+            if (!assetPath.StartsWith(CharacterTextureDir, System.StringComparison.Ordinal)) return;
+
+            var ti = (TextureImporter)assetImporter;
+            ti.mipmapEnabled = true;
+            ti.wrapMode = TextureWrapMode.Clamp;   // UV nhân vật nằm gọn trong ô, không lát
+            ti.filterMode = FilterMode.Bilinear;
+            ti.textureCompression = TextureImporterCompression.Compressed;
+
+            // Bản gốc 4096² là cỡ để render tĩnh. Thủ môn đứng cách máy 14m, cao chừng một
+            // phần ba màn hình điện thoại — 1024 đã hơn đủ, mà tiết kiệm 15/16 bộ nhớ texture.
+            ti.maxTextureSize = 1024;
+
+            bool isNormal = Path.GetFileNameWithoutExtension(assetPath)
+                                .EndsWith("_Normal", System.StringComparison.OrdinalIgnoreCase);
+            if (isNormal)
+            {
+                ti.textureType = TextureImporterType.NormalMap;
+            }
+            else
+            {
+                ti.textureType = TextureImporterType.Default;
+                ti.sRGBTexture = true;
             }
         }
 

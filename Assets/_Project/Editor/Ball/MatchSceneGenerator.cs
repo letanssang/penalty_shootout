@@ -18,6 +18,7 @@ using Eleven.Presentation.Grass;
 using Eleven.Presentation.Net;
 using Eleven.Shooter;
 using Eleven.UI;
+using Eleven.Editor.Tools;
 
 namespace Eleven.Editor.SceneSetup
 {
@@ -46,6 +47,10 @@ namespace Eleven.Editor.SceneSetup
         [MenuItem("Eleven/Gameplay/Dựng Scene Thi Đấu (Match.unity)")]
         public static void GenerateMatchScene()
         {
+            // Vật liệu đạo cụ là ASSET; dựng trước để bóng và khung thành có cái mà gán,
+            // kể cả trong lần dựng đầu tiên trên một máy vừa clone repo về.
+            PropModelLibrary.EnsureMaterials();
+
             var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
 
             BuildLighting();
@@ -124,20 +129,28 @@ namespace Eleven.Editor.SceneSetup
 
         static void BuildPitch(Transform parent)
         {
+            // Mặt cỏ là ẢNH CHỤP CỎ THẬT lát đi lát lại, không còn là mảng màu xanh trơn
+            // (đổi 2026-08-28). Số lần lát nằm sẵn trong vật liệu — xem PropModelLibrary.
+            // Plane dựng sẵn của Unity rộng 10 đơn vị nên chia 10 ra localScale.
+            const float span = PropModelLibrary.PitchSpanMeters;
+
             var pitch = Primitive(PrimitiveType.Plane, "PitchGround", parent);
             pitch.transform.position = new Vector3(0f, 0f, 6f);
-            pitch.transform.localScale = new Vector3(4.2f, 1f, 4.2f);
-            Paint(pitch, new Color(0.14f, 0.34f, 0.16f), lit: true);
+            pitch.transform.localScale = new Vector3(span / 10f, 1f, span / 10f);
+            PaintAsset(pitch, PropModelLibrary.PitchGrassMaterial);
 
-            // Sọc cắt cỏ — thứ duy nhất khiến một mặt phẳng xanh trông ra sân bóng.
+            // Sọc cắt cỏ — thứ duy nhất khiến một mặt phẳng xanh trông ra sân bóng. Nay là
+            // cùng tấm cỏ đó tô sáng hơn 1.18 lần, đúng như sân thật: máy cắt cỏ chỉ vuốt
+            // lá cỏ nằm rạp về một phía chứ không đổi màu cỏ.
             var stripes = new GameObject("MowStripes").transform;
             stripes.SetParent(parent, false);
             for (int i = -6; i <= 6; i++)
             {
                 var s = Primitive(PrimitiveType.Cube, $"Stripe_{i + 6}", stripes);
                 s.transform.position = new Vector3(0f, 0.004f, 6f + i * 2.6f);
-                s.transform.localScale = new Vector3(42f, 0.008f, 1.3f);
-                Paint(s, new Color(0.17f, 0.40f, 0.19f), lit: true);
+                s.transform.localScale =
+                    new Vector3(span, 0.008f, PropModelLibrary.MowStripeDepthMeters);
+                PaintAsset(s, PropModelLibrary.PitchStripeMaterial);
             }
 
             var lines = new GameObject("PitchLines").transform;
@@ -193,37 +206,13 @@ namespace Eleven.Editor.SceneSetup
             var goal = new GameObject("Goal").transform;
             goal.SetParent(parent, false);
 
-            float postDiameter = PostR * 2f;
-
-            var left = Primitive(PrimitiveType.Cylinder, "LeftPost", goal);
-            left.transform.position = new Vector3(-PostX, BarY * 0.5f, GoalZ);
-            left.transform.localScale = new Vector3(postDiameter, BarY * 0.5f, postDiameter);
-            Paint(left, Color.white, lit: true);
-
-            var right = Primitive(PrimitiveType.Cylinder, "RightPost", goal);
-            right.transform.position = new Vector3(PostX, BarY * 0.5f, GoalZ);
-            right.transform.localScale = new Vector3(postDiameter, BarY * 0.5f, postDiameter);
-            Paint(right, Color.white, lit: true);
-
-            var bar = Primitive(PrimitiveType.Cylinder, "Crossbar", goal);
-            bar.transform.position = new Vector3(0f, BarY, GoalZ);
-            bar.transform.rotation = Quaternion.Euler(0f, 0f, 90f);
-            bar.transform.localScale = new Vector3(postDiameter, PostX, postDiameter);
-            Paint(bar, Color.white, lit: true);
-
-            // Khung hậu đỡ lưới (chỉ để mắt tin rằng cái lưới có chỗ bám).
-            foreach (int sign in new[] { -1, 1 })
+            // Khung thành thật (model) nếu có; nếu thiếu file thì lùi về primitive để scene
+            // vẫn dựng được trên máy chưa kéo asset về. Lưới thì KHÔNG lấy của model — nó
+            // cứng đờ và nặng 221.820 tam giác; lưới của scene này là lưới Verlet ở dưới.
+            if (PropModelLibrary.InstantiateGoal(goal, GoalZ) == null)
             {
-                var backPost = Primitive(PrimitiveType.Cylinder, sign < 0 ? "LeftBackSupport" : "RightBackSupport", goal);
-                backPost.transform.position = new Vector3(sign * PostX, 0.85f, GoalZ + 1.75f);
-                backPost.transform.localScale = new Vector3(0.08f, 0.85f, 0.08f);
-                Paint(backPost, new Color(0.85f, 0.88f, 0.92f), lit: true);
-
-                var brace = Primitive(PrimitiveType.Cylinder, sign < 0 ? "LeftBrace" : "RightBrace", goal);
-                brace.transform.position = new Vector3(sign * PostX, 1.68f, GoalZ + 0.9f);
-                brace.transform.rotation = Quaternion.Euler(46f, 0f, 0f);
-                brace.transform.localScale = new Vector3(0.07f, 1.20f, 0.07f);
-                Paint(brace, new Color(0.85f, 0.88f, 0.92f), lit: true);
+                Debug.LogWarning($"[MatchSceneGenerator] Thiếu {PropModelLibrary.GoalFbx} — dựng khung thành greybox.");
+                BuildGreyboxGoal(goal);
             }
 
             // Lưới: mesh do NetSimulator sinh mỗi khung, ở đây chỉ cần chỗ để vẽ.
@@ -245,6 +234,45 @@ namespace Eleven.Editor.SceneSetup
                 b.transform.position = new Vector3(-16f + i * 4f, 0.5f, GoalZ + 3.6f);
                 b.transform.localScale = new Vector3(3.8f, 1.0f, 0.12f);
                 Paint(b, i % 2 == 0 ? new Color(0.08f, 0.12f, 0.30f) : new Color(0.55f, 0.10f, 0.14f), lit: true);
+            }
+        }
+
+        /// <summary>
+        /// Khung thành bằng primitive — bản dự phòng khi thiếu model. Kích thước vẫn đọc từ
+        /// <see cref="GoalFrame"/> nên vào/trượt tính ra y hệt, chỉ khác cái nhìn thấy.
+        /// </summary>
+        static void BuildGreyboxGoal(Transform goal)
+        {
+            float postDiameter = PostR * 2f;
+
+            var left = Primitive(PrimitiveType.Cylinder, "LeftPost", goal);
+            left.transform.position = new Vector3(-PostX, BarY * 0.5f, GoalZ);
+            left.transform.localScale = new Vector3(postDiameter, BarY * 0.5f, postDiameter);
+            Paint(left, Color.white, lit: true);
+
+            var right = Primitive(PrimitiveType.Cylinder, "RightPost", goal);
+            right.transform.position = new Vector3(PostX, BarY * 0.5f, GoalZ);
+            right.transform.localScale = new Vector3(postDiameter, BarY * 0.5f, postDiameter);
+            Paint(right, Color.white, lit: true);
+
+            var bar = Primitive(PrimitiveType.Cylinder, "Crossbar", goal);
+            bar.transform.position = new Vector3(0f, BarY, GoalZ);
+            bar.transform.rotation = Quaternion.Euler(0f, 0f, 90f);
+            bar.transform.localScale = new Vector3(postDiameter, PostX, postDiameter);
+            Paint(bar, Color.white, lit: true);
+
+            foreach (int sign in new[] { -1, 1 })
+            {
+                var backPost = Primitive(PrimitiveType.Cylinder, sign < 0 ? "LeftBackSupport" : "RightBackSupport", goal);
+                backPost.transform.position = new Vector3(sign * PostX, 0.85f, GoalZ + 1.75f);
+                backPost.transform.localScale = new Vector3(0.08f, 0.85f, 0.08f);
+                Paint(backPost, new Color(0.85f, 0.88f, 0.92f), lit: true);
+
+                var brace = Primitive(PrimitiveType.Cylinder, sign < 0 ? "LeftBrace" : "RightBrace", goal);
+                brace.transform.position = new Vector3(sign * PostX, 1.68f, GoalZ + 0.9f);
+                brace.transform.rotation = Quaternion.Euler(46f, 0f, 0f);
+                brace.transform.localScale = new Vector3(0.07f, 1.20f, 0.07f);
+                Paint(brace, new Color(0.85f, 0.88f, 0.92f), lit: true);
             }
         }
 
@@ -312,68 +340,212 @@ namespace Eleven.Editor.SceneSetup
         //  Bóng, thủ môn, người sút
         // ═══════════════════════════════════════════════════════════════════════
 
+        /// <summary>
+        /// Bóng = gốc điều khiển (scale 1) + phần nhìn thấy làm con.
+        ///
+        /// Tách hai tầng vì hai lý do, cả hai đều là lỗi đã từng xảy ra:
+        ///  • <see cref="BallSpinView"/> xoay phần nhìn thấy; nếu nó xoay chính cái transform
+        ///    mà <see cref="BallDriver"/> đang ghi vị trí thì hai bên tranh nhau một transform.
+        ///  • <see cref="TrailRenderer"/> nhân bề rộng theo scale của transform nó nằm trên.
+        ///    Hồi gốc bóng còn là quả cầu scale 0.22, hai con số 0.15/0.01 dưới đây thật ra
+        ///    đang vẽ ra vệt rộng 0.033/0.0022m. Nay gốc scale 1 nên ghi thẳng số mét thật —
+        ///    hình vẽ ra không đổi một pixel.
+        /// </summary>
         static GameObject BuildBall(out TrailRenderer trail)
         {
-            var ball = Primitive(PrimitiveType.Sphere, "MatchBall", null);
+            var ball = new GameObject("MatchBall");
             ball.transform.position = new Vector3(0f, BallR, 0f);
-            ball.transform.localScale = Vector3.one * (BallR * 2f);
-            Paint(ball, new Color(0.97f, 0.97f, 0.98f), lit: true);
+
+            GameObject visual = PropModelLibrary.InstantiateBallVisual(ball.transform);
+            if (visual == null)
+            {
+                Debug.LogWarning($"[MatchSceneGenerator] Thiếu {PropModelLibrary.BallFbx} — dựng bóng greybox.");
+                visual = Primitive(PrimitiveType.Sphere, "BallVisual", ball.transform);
+                visual.transform.localScale = Vector3.one * (BallR * 2f);
+                Paint(visual, new Color(0.97f, 0.97f, 0.98f), lit: true);
+            }
 
             trail = ball.AddComponent<TrailRenderer>();
             trail.time = 0.45f;
-            trail.startWidth = 0.15f;
-            trail.endWidth = 0.01f;
+            trail.startWidth = 0.033f;
+            trail.endWidth = 0.0022f;
             trail.emitting = false;
             trail.numCapVertices = 2;
             trail.sharedMaterial = MakeMaterial(Color.white, lit: false);
             trail.shadowCastingMode = ShadowCastingMode.Off;
 
-            ball.AddComponent<BallDriver>();
+            var driver = ball.AddComponent<BallDriver>();
+
+            var spinView = visual.AddComponent<BallSpinView>();
+            var spinSo = new SerializedObject(spinView);
+            spinSo.FindProperty("driver").objectReferenceValue = driver;
+            spinSo.FindProperty("radius").floatValue = BallR;
+            spinSo.ApplyModifiedPropertiesWithoutUndo();
+
             return ball;
         }
 
+        const string KeeperModelPath = "Assets/_Project/Art/Characters/Goalkeeper.fbx";
+        const string KeeperControllerPath = "Assets/_Project/Art/Animations/KeeperAnimator.controller";
+
+        /// <summary>
+        /// Dựng thủ môn. Ưu tiên model có xương; thiếu model, Avatar hay controller thì lùi về
+        /// khối primitive để scene vẫn dựng được — cùng lối rẽ như <see cref="BuildKicker"/>.
+        ///
+        /// Hai nhánh KHÁC NHAU Ở GỐC TOẠ ĐỘ, và đó là toàn bộ chỗ khó: khối primitive lấy gốc
+        /// ở giữa thân (y = 0.95), model Mixamo lấy gốc ở gót chân (y = 0). GoalkeeperView
+        /// biết chuyện đó qua cờ <c>rootAtFeet</c>, xem lý do trong chính lớp ấy.
+        /// </summary>
         static GoalkeeperView BuildKeeper()
         {
             var go = new GameObject("Goalkeeper");
-            go.transform.position = new Vector3(0f, 0.95f, GoalZ);
             go.transform.rotation = Quaternion.Euler(0f, 180f, 0f);
 
-            var torso = Primitive(PrimitiveType.Capsule, "Torso", go.transform);
-            torso.transform.localPosition = new Vector3(0f, 0.05f, 0f);
-            torso.transform.localScale = new Vector3(0.52f, 0.62f, 0.34f);
-            Paint(torso, new Color(0.98f, 0.80f, 0.08f), lit: true);
+            Transform handL = null, handR = null;
+            Animator animator = BuildKeeperModel(go.transform, ref handL, ref handR);
+            bool hasModel = animator != null;
 
-            var head = Primitive(PrimitiveType.Sphere, "Head", go.transform);
-            head.transform.localPosition = new Vector3(0f, 0.78f, 0f);
-            head.transform.localScale = Vector3.one * 0.22f;
-            Paint(head, new Color(0.86f, 0.68f, 0.55f), lit: true);
+            if (!hasModel) BuildKeeperGreybox(go.transform);
 
-            var legs = Primitive(PrimitiveType.Capsule, "Legs", go.transform);
-            legs.transform.localPosition = new Vector3(0f, -0.55f, 0f);
-            legs.transform.localScale = new Vector3(0.30f, 0.42f, 0.28f);
-            Paint(legs, new Color(0.12f, 0.12f, 0.16f), lit: true);
+            // Gốc toạ độ: gót chân với model, giữa thân với khối primitive.
+            Vector3 home = new Vector3(0f, hasModel ? 0f : 0.95f, GoalZ);
+            go.transform.position = home;
 
-            var glL = Primitive(PrimitiveType.Sphere, "LeftGlove", go.transform);
-            glL.transform.position = new Vector3(-0.72f, 1.05f, GoalZ);
-            glL.transform.localScale = Vector3.one * 0.20f;
-            Paint(glL, new Color(0.95f, 0.98f, 1f), lit: true);
-
-            var glR = Primitive(PrimitiveType.Sphere, "RightGlove", go.transform);
-            glR.transform.position = new Vector3(0.72f, 1.05f, GoalZ);
-            glR.transform.localScale = Vector3.one * 0.20f;
-            Paint(glR, new Color(0.95f, 0.98f, 1f), lit: true);
+            // "Găng tay" mà GoalkeeperView vươn tới bóng là CHÍNH XƯƠNG BÀN TAY khi có model,
+            // chứ không phải một quả cầu gắn thêm. Model này đã có găng thủ môn dựng và tô
+            // texture sẵn (màu cam ở cổ tay), nên quả cầu chỉ làm hai việc, cả hai đều xấu:
+            // nó là một hòn xám nằm ĐÚNG KHỚP CỔ TAY để bàn tay thật chọc xuyên qua — thấy rõ
+            // trong khung hình chụp ngày 2026-08-28 — và nó tốn thêm hai lệnh vẽ.
+            //
+            // Với model, hai ô này chỉ còn để tra cứu và cho test soi: việc kéo bàn tay tới
+            // điểm SaveResolver chấm đã chuyển sang KeeperHandIK gắn ngay dưới đây, vì
+            // Animator KHÔNG còn bị tắt lúc bay người nữa (clip lo tư thế) — đặt thẳng
+            // transform.position lên xương bây giờ sẽ bị chính Animator ghi đè ngay khung sau.
+            // IK còn được cái lợi mà cách cũ không có: nó bẻ cả khuỷu, nên cánh tay vươn ra
+            // chứ không giãn dai như sợi kẹo.
+            Transform glL = handL, glR = handR;
+            if (!hasModel)
+            {
+                glL = BuildGlove("LeftGlove", go.transform, new Vector3(-0.72f, 1.05f, GoalZ)).transform;
+                glR = BuildGlove("RightGlove", go.transform, new Vector3(0.72f, 1.05f, GoalZ)).transform;
+            }
 
             var view = go.AddComponent<GoalkeeperView>();
             var so = new SerializedObject(view);
-            so.FindProperty("homePosition").vector3Value = new Vector3(0f, 0.95f, GoalZ);
-            so.FindProperty("leftGlove").objectReferenceValue = glL.transform;
-            so.FindProperty("rightGlove").objectReferenceValue = glR.transform;
+            so.FindProperty("homePosition").vector3Value = home;
+            so.FindProperty("leftGlove").objectReferenceValue = glL;
+            so.FindProperty("rightGlove").objectReferenceValue = glR;
+            so.FindProperty("rootAtFeet").boolValue = hasModel;
+            so.FindProperty("animator").objectReferenceValue = animator;
+            so.FindProperty("handIK").objectReferenceValue =
+                animator != null ? animator.GetComponent<KeeperHandIK>() : null;
             so.ApplyModifiedPropertiesWithoutUndo();
 
             return view;
         }
 
-        const string KickerModelPath = "Assets/_Project/Art/Characters/XBot.fbx";
+        /// <summary>
+        /// Gắn model thủ môn vào <paramref name="parent"/>. Trả về Animator đã dựng xong, hoặc
+        /// null nếu thiếu asset — chỗ gọi tự lùi về greybox.
+        /// </summary>
+        static Animator BuildKeeperModel(Transform parent, ref Transform handL, ref Transform handR)
+        {
+            var fbx = AssetDatabase.LoadAssetAtPath<GameObject>(KeeperModelPath);
+            var controller = AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>(KeeperControllerPath);
+            var avatarAsset = AssetDatabase.LoadAssetAtPath<Avatar>(KeeperModelPath);
+
+            if (fbx == null || controller == null || avatarAsset == null || !avatarAsset.isHuman)
+            {
+                Debug.LogWarning($"[MatchSceneGenerator] Thiếu {KeeperModelPath} hoặc {KeeperControllerPath} " +
+                                 "(hoặc Avatar không phải Humanoid) — dựng thủ môn greybox thay thế. " +
+                                 "Chạy Eleven > Art > Build Keeper Animator Controller rồi dựng lại scene.");
+                return null;
+            }
+
+            var model = (GameObject)PrefabUtility.InstantiatePrefab(fbx);
+            model.name = "Body";
+            model.transform.SetParent(parent, false);
+
+            var animator = model.GetComponent<Animator>() ?? model.AddComponent<Animator>();
+            animator.avatar = avatarAsset;
+            animator.runtimeAnimatorController = controller;
+
+            // Vị trí ngang của thủ môn do gameplay đặt (GoalkeeperView), không do clip đẩy.
+            animator.applyRootMotion = false;
+            // Batchmode và khung hình mà thủ môn nằm ngoài mép màn hình vẫn phải cập nhật:
+            // tắt là pha bay người đứng hình đúng lúc người chơi đang nhìn nó.
+            animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+
+            // Vật liệu do PropModelLibrary dựng — importer đặt materialImportMode = None nên
+            // model về tay ta không có vật liệu nào, phải gán ở đây.
+            var keeperMat = AssetDatabase.LoadAssetAtPath<Material>(PropModelLibrary.KeeperMaterial);
+            if (keeperMat != null)
+            {
+                foreach (var r in model.GetComponentsInChildren<Renderer>(true))
+                {
+                    var mats = new Material[r.sharedMaterials.Length];
+                    for (int i = 0; i < mats.Length; i++) mats[i] = keeperMat;
+                    r.sharedMaterials = mats;
+                }
+            }
+
+            // Bộ ghim bàn tay PHẢI ngồi cùng GameObject với Animator: Unity chỉ gọi
+            // OnAnimatorIK trên component nằm cạnh Animator, gắn lên node cha là nó im lặng
+            // không chạy — và im lặng ở đây nghĩa là bàn tay lệch khỏi điểm chấm điểm.
+            if (model.GetComponent<KeeperHandIK>() == null) model.AddComponent<KeeperHandIK>();
+
+            handL = animator.GetBoneTransform(HumanBodyBones.LeftHand);
+            handR = animator.GetBoneTransform(HumanBodyBones.RightHand);
+            if (handL == null || handR == null)
+            {
+                Debug.LogWarning("[MatchSceneGenerator] Avatar thủ môn không trả về xương bàn tay — " +
+                                 "găng tay gắn vào gốc thay vì vào tay.");
+            }
+
+            return animator;
+        }
+
+        /// <summary>Thủ môn khối hộp — bản dự phòng khi chưa có model, giữ nguyên như trước.</summary>
+        static void BuildKeeperGreybox(Transform parent)
+        {
+            var torso = Primitive(PrimitiveType.Capsule, "Torso", parent);
+            torso.transform.localPosition = new Vector3(0f, 0.05f, 0f);
+            torso.transform.localScale = new Vector3(0.52f, 0.62f, 0.34f);
+            Paint(torso, new Color(0.98f, 0.80f, 0.08f), lit: true);
+
+            var head = Primitive(PrimitiveType.Sphere, "Head", parent);
+            head.transform.localPosition = new Vector3(0f, 0.78f, 0f);
+            head.transform.localScale = Vector3.one * 0.22f;
+            Paint(head, new Color(0.86f, 0.68f, 0.55f), lit: true);
+
+            var legs = Primitive(PrimitiveType.Capsule, "Legs", parent);
+            legs.transform.localPosition = new Vector3(0f, -0.55f, 0f);
+            legs.transform.localScale = new Vector3(0.30f, 0.42f, 0.28f);
+            Paint(legs, new Color(0.12f, 0.12f, 0.16f), lit: true);
+        }
+
+        /// <summary>
+        /// Một chiếc găng cho THỦ MÔN KHỐI HỘP. Chỉ nhánh dự phòng mới gọi tới: có model thì
+        /// bàn tay thật đóng vai này, xem lý do ở <see cref="BuildKeeper"/>. Quả cầu ở đây to
+        /// vì nó CHÍNH LÀ bàn tay người chơi nhìn thấy.
+        /// </summary>
+        static GameObject BuildGlove(string name, Transform parent, Vector3 world)
+        {
+            var glove = Primitive(PrimitiveType.Sphere, name, parent);
+            glove.transform.position = world;
+            glove.transform.localScale = Vector3.one * 0.20f;
+            Paint(glove, new Color(0.95f, 0.98f, 1f), lit: true);
+            return glove;
+        }
+
+        /// <summary>
+        /// Model người sút NHÌN THẤY trên sân. Cố ý KHÁC với
+        /// <see cref="Eleven.Editor.Tools.MixamoModelImport"/>.KickerCharacter (vẫn là XBot.fbx):
+        /// XBot là bộ xương gốc để retarget toàn bộ thư viện clip Mixamo — mọi số đo khung
+        /// chạm bóng ở T35 tính trên nó, đổi đi là sai hết. Ch38 chỉ thay phần da thịt nhìn
+        /// thấy: cả hai đều Humanoid nên Mecanim tự khớp lại xương lúc chạy.
+        /// </summary>
+        const string KickerModelPath = "Assets/_Project/Art/Characters/Kicker.fbx";
         const string KickerControllerPath = "Assets/_Project/Art/Animations/KickerAnimator.controller";
 
         /// <summary>
@@ -592,6 +764,27 @@ namespace Eleven.Editor.SceneSetup
             var mr = go.GetComponent<MeshRenderer>();
             if (mr == null) return;
             mr.sharedMaterial = MakeMaterial(color, lit);
+        }
+
+        /// <summary>
+        /// Gán một vật liệu ASSET (có texture) thay cho màu trơn dựng lúc chạy. Lùi về màu
+        /// cỏ trơn nếu chưa dựng được vật liệu, để bộ sinh scene không gãy giữa chừng.
+        /// </summary>
+        static void PaintAsset(GameObject go, string materialPath)
+        {
+            var mr = go.GetComponent<MeshRenderer>();
+            if (mr == null) return;
+
+            var mat = AssetDatabase.LoadAssetAtPath<Material>(materialPath);
+            if (mat == null)
+            {
+                Debug.LogWarning($"[MatchSceneGenerator] Thiếu vật liệu {materialPath} — " +
+                                 "tô màu trơn tạm. Chạy Eleven > Art > Dựng Vật Liệu Đạo Cụ.");
+                mr.sharedMaterial = MakeMaterial(new Color(0.14f, 0.34f, 0.16f), lit: true);
+                return;
+            }
+
+            mr.sharedMaterial = mat;
         }
 
         static Material MakeMaterial(Color color, bool lit)

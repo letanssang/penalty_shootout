@@ -2,6 +2,7 @@ using Unity.Mathematics;
 using Eleven.Ball;
 using Eleven.Keeper;
 using Eleven.Presentation.Crowd;
+using Eleven.Presentation.Net;
 
 namespace Eleven.Presentation
 {
@@ -30,11 +31,14 @@ namespace Eleven.Presentation
         /// <summary>Ma sát trượt mỗi lần chạm đất: giữ lại 80% vận tốc ngang.</summary>
         public const float GroundFriction = 0.80f;
 
-        /// <summary>Hệ số hãm trong lòng lưới (1/s). Chính nó làm cú sút "găm" chứ không xuyên.</summary>
+        /// <summary>Hệ số hãm trong lòng lưới (1/s) — lực cản của sợi lưới miết vào bóng.</summary>
         public const float NetDamping = 7.5f;
 
-        /// <summary>Lưới sâu bao nhiêu mét sau vạch vôi.</summary>
-        public const float NetDepth = 1.8f;
+        /// <summary>Nảy khi bóng đập vào mặt lưới: lưới mềm, nuốt gần hết động năng.</summary>
+        public const float NetRestitution = 0.18f;
+
+        /// <summary>Lưới sâu bao nhiêu mét sau vạch vôi, đo ở sát đất.</summary>
+        public const float NetDepth = NetGridGenerator.BottomDepth;
 
         /// <summary>Dưới tốc độ này và đã chạm đất thì coi như bóng chết hẳn.</summary>
         public const float RestSpeed = 0.35f;
@@ -74,11 +78,26 @@ namespace Eleven.Presentation
             return h;
         }
 
+        /// <summary>
+        /// Mặt sau của lưới nằm ở z bao nhiêu, tại độ cao <paramref name="y"/>.
+        ///
+        /// Lưới KHÔNG phải bức tường thẳng đứng: nó treo từ xà ngang chếch ra sau, chân lưới
+        /// bị kéo về phía sau xa hơn đỉnh. Lấy đúng hình dạng đó từ NetGridGenerator — hai
+        /// nơi mà lệch nhau thì tấm lưới người chơi NHÌN THẤY và bức tường quả bóng ĐẬP VÀO
+        /// không còn là một, bóng sẽ dừng lơ lửng trước lưới hoặc thụt vào sau lưới.
+        /// </summary>
+        public static float NetBackZ(float y)
+        {
+            float t = math.saturate(y / GoalFrame.Height);   // 1 ở xà ngang, 0 ở mặt đất
+            return NetGridGenerator.GoalLineZ +
+                   math.lerp(NetGridGenerator.BottomDepth, NetGridGenerator.TopDepth, t);
+        }
+
         /// <summary>Bóng có đang nằm trong lòng lưới không.</summary>
         public static bool IsInsideNet(float3 pos)
         {
             return pos.z >= GoalFrame.PenaltyDistance &&
-                   pos.z <= GoalFrame.PenaltyDistance + NetDepth &&
+                   pos.z <= NetBackZ(pos.y) &&
                    math.abs(pos.x) <= GoalFrame.Width * 0.5f &&
                    pos.y <= GoalFrame.Height;
         }
@@ -111,10 +130,50 @@ namespace Eleven.Presentation
                 return false;
             }
 
-            if (IsInsideNet(pos))
+            // Lưới là cái TÚI, không phải màn sương hãm tốc.
+            //
+            // Trước ngày 2026-08-28 chỗ này chỉ nhân vận tốc với hệ số hãm rồi thôi. Làm phép
+            // tính: 25 m/s, dt = 1/120, hệ số 7.5/s -> mỗi bước còn 0.9375 lần, quãng đường
+            // hãm tới lúc đứng là 3.33m. Túi lưới chỉ sâu 1.8m. Nghĩa là quả bóng LUÔN chạy
+            // hết lưới rồi bay ra sau khung thành — đúng như người chơi báo "chỉ thấy bóng
+            // xuyên qua lưới". Hãm bao nhiêu cũng không sửa được, vì thiếu hẳn cái mặt chắn.
+            //
+            // Nay dựng đủ ba mặt của túi: mặt sau nghiêng, hai mặt hông, và nóc. Chỉ áp khi
+            // bóng ĐANG ở trong lòng khung thành — quả sút vọt xà hay ra ngoài cột không bao
+            // giờ thoả điều kiện nên vẫn bay tự do như cũ. Vì mỗi mặt kẹp bóng lại trước khi
+            // nó chạm mép, bước sau bóng vẫn còn trong lòng túi, nên đã vào là không ra được.
+            //
+            // Xét ở ĐẦU bước chứ không phải cuối bước. Cú sút 25 m/s ở nhịp solver 120Hz đi
+            // 0.21m một bước, thừa sức nhảy từ trong lòng lưới ra hẳn ngoài mặt sau chỉ trong
+            // một bước; xét vị trí cuối bước thì đúng cái bước quyết định ấy lại không thoả
+            // điều kiện, và bóng thoát ra ngoài. Vị trí đầu bước thì luôn là vị trí đã được
+            // kẹp của bước trước, nên vào rồi là không sổng.
+            if (IsInsideNet(pos - vel * dt))
             {
                 vel *= 1f - NetDamping * dt;
                 changed = true;
+
+                float backZ = NetBackZ(pos.y) - ballRadius;
+                if (pos.z > backZ)
+                {
+                    pos.z = backZ;
+                    if (vel.z > 0f) vel.z = -vel.z * NetRestitution;
+                }
+
+                float sideX = GoalFrame.Width * 0.5f - ballRadius;
+                if (math.abs(pos.x) > sideX)
+                {
+                    float side = math.sign(pos.x);
+                    pos.x = side * sideX;
+                    if (vel.x * side > 0f) vel.x = -vel.x * NetRestitution;
+                }
+
+                float topY = GoalFrame.Height - ballRadius;
+                if (pos.y > topY)
+                {
+                    pos.y = topY;
+                    if (vel.y > 0f) vel.y = -vel.y * NetRestitution;
+                }
             }
 
             float floor = SurfaceHeight(pos.x, pos.z) + ballRadius;
