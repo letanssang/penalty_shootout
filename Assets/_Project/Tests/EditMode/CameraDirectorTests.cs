@@ -69,9 +69,16 @@ namespace Eleven.Tests.EditMode
             Assert.IsFalse(director.IsWithinAuthoredBounds(new float3(0.0f, -1.0f, 5.0f)));
             Assert.IsFalse(director.IsWithinAuthoredBounds(new float3(0.0f, 8.0f, 5.0f)));
 
-            // Điểm quá xa phía sau người sút hoặc quá sâu sau khung thành (Z)
-            Assert.IsFalse(director.IsWithinAuthoredBounds(new float3(0.0f, 2.0f, -8.0f)));
+            // Điểm quá xa phía sau người sút hoặc quá sâu sau khung thành (Z).
+            // Mốc -12 chứ không phải -8: ngày 2026-08-28 biên sau nới xuống -11.5 để camera
+            // lùi đủ xa mà thấy CẢ NGƯỜI sút (CameraRig.PoseFor → z = -10.5). Con số cũ -8
+            // giờ nằm TRONG vùng đã dựng, nên nó không còn kiểm được cái nó định kiểm.
+            Assert.IsFalse(director.IsWithinAuthoredBounds(new float3(0.0f, 2.0f, -12.0f)));
             Assert.IsFalse(director.IsWithinAuthoredBounds(new float3(0.0f, 2.0f, 20.0f)));
+
+            // Và chốt luôn chiều ngược lại: chỗ đứng thật của góc sau lưng người sút phải
+            // nằm trong biên, nếu không thì Apply() sẽ kẹp nó và khung hình lại mất bàn chân.
+            Assert.IsTrue(director.IsWithinAuthoredBounds(new float3(0.0f, 3.4f, -10.5f)));
         }
 
         [Test]

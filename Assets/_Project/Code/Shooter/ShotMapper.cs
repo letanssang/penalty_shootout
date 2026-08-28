@@ -107,9 +107,8 @@ namespace Eleven.Shooter {
 
         /// <summary>
         /// Công suất chuẩn hoá [0,1] suy từ chiều dài cú vuốt. Tách ra khỏi <see cref="Map"/>
-        /// vì <see cref="Classify"/> cần đúng con số này, và lớp hoạt ảnh cần phân loại tạm
-        /// một cú vuốt CHƯA nhả ngón (xem TouchSwipeReceiver.TryPeekShotType). Hai chỗ tự
-        /// tính lại công thức là hai chỗ sẽ lệch nhau vào một ngày nào đó.
+        /// vì <see cref="Classify"/> cần đúng con số này. Hai chỗ tự tính lại công thức là
+        /// hai chỗ sẽ lệch nhau vào một ngày nào đó.
         ///
         /// Kẹp đầu ra đường cong: AnimationCurve có thể vọt ra ngoài [0,1] nếu tiếp tuyến bị
         /// kéo mạnh trong Inspector. Không kẹp thì lời hứa "không bao giờ vượt maxSpeed" sẽ

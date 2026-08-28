@@ -140,37 +140,6 @@ namespace Eleven.Shooter
             }
         }
 
-        /// <summary>
-        /// Phân loại TẠM cú vuốt đang dở, để lớp hoạt ảnh chọn được clip sút trước khi người
-        /// chơi nhả ngón. Trả về <c>false</c> khi chưa đủ dữ liệu để đoán tử tế — gọi bên
-        /// nhận cứ giữ nguyên phán đoán trước đó.
-        ///
-        /// ĐÂY KHÔNG PHẢI Ý ĐỒ SÚT. Vector phóng vẫn do <see cref="BuildIntent"/> tính lúc
-        /// nhả ngón, đúng luật Phase 7: hoạt ảnh nhận loại cú sút, không quyết định nó. Nếu
-        /// người chơi đổi ý giữa chừng thì bóng đi theo bản chính thức; chỉ hoạt ảnh là đã
-        /// cam kết — hệt như ngoài đời, cú vung chân đang giữa chừng thì không đổi kiểu được.
-        /// </summary>
-        public bool TryPeekShotType(out ShotType type)
-        {
-            type = ShotType.Instep;
-            if (collector == null || !isSwiping) return false;
-            if (!collector.TryPeek(out SwipeFeatures f)) return false;
-
-            // Cùng ngưỡng mà End() dùng để loại chạm nhầm. Dưới ngưỡng thì hình dáng cử chỉ
-            // chưa có nghĩa gì: 4 mm đầu tiên của MỌI cú vuốt đều trông như nhau.
-            if (f.length < minSwipeDistCm) return false;
-
-            // Dùng THẲNG bộ phân loại chính thức, không thêm luật riêng cho bản tạm. Đã thử
-            // chặn nhánh lốp khi cử chỉ kéo dài hơn mọi cú lốp có thể (2026-08-28) và bỏ đi:
-            // luật chơi bắt người chơi GIỮ ngón rồi nhả đúng lúc, nên một cú lốp thật hoàn
-            // toàn có thể bị giữ nửa giây trước khi nhả — chặn theo thời lượng là cướp mất
-            // hoạt ảnh lốp của đúng người vuốt lốp. Hai bộ luật song song còn là hai bộ luật
-            // sẽ lệch nhau.
-            ShotMappingConfig cfg = Config;
-            type = ShotMapper.Classify(f, cfg, ShotMapper.SpeedT(f, cfg));
-            return true;
-        }
-
         /// <summary>Chiếu điểm chạm lên mặt phẳng khung thành (z = 11m).</summary>
         public static float3 AimPointFromScreen(Vector2 screenPos, Camera cam)
         {

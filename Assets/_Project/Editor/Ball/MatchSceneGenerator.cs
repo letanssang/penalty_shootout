@@ -9,6 +9,7 @@ using Eleven.Core;
 using Eleven.Keeper;
 using Eleven.Match;
 using Eleven.Presentation;
+using Eleven.Presentation.Aim;
 using Eleven.Presentation.Kicker;
 using Eleven.Presentation.Audio;
 using Eleven.Presentation.Crowd;
@@ -473,6 +474,8 @@ namespace Eleven.Editor.SceneSetup
             cues.ballPosition = new float3(0f, BallR, 0f);
             cues.runUpDuration = 1.05f;
 
+            AimTrajectoryView aim = BuildAimTrajectory();
+
             var loop = ctrl.AddComponent<MatchGameLoop>();
             var so = new SerializedObject(loop);
             Set(so, "ballTransform", ball.transform);
@@ -482,6 +485,7 @@ namespace Eleven.Editor.SceneSetup
             Set(so, "kickerModel", kickerModel);
             Set(so, "kickerGreybox", kickerGreybox);
             Set(so, "cueSource", cues);
+            Set(so, "aimTrajectory", aim);
             Set(so, "swipeReceiver", swipe);
             Set(so, "scoreboard", scoreboard);
             Set(so, "cameraRig", rig);
@@ -491,6 +495,53 @@ namespace Eleven.Editor.SceneSetup
             Set(so, "mediumProfile", LoadAsset<KeeperProfile>($"{SettingsDir}/KeeperProfile-Medium.asset"));
             Set(so, "hardProfile", LoadAsset<KeeperProfile>($"{SettingsDir}/KeeperProfile-Hard.asset"));
             so.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        /// <summary>
+        /// Đường bay dự kiến hiện ra sau khi người chơi vuốt xong (yêu cầu 2026-08-28).
+        ///
+        /// Hai LineRenderer chứ không phải một: đường bay là polyline mở, còn vòng tròn điểm
+        /// chạm là đường khép kín ở mặt phẳng khung thành. Nhét chung một renderer thì phải
+        /// nối chúng bằng một đoạn thẳng giả từ điểm cuối quỹ đạo về tâm vòng tròn — đúng
+        /// chỗ mắt người chơi đang nhìn nhất.
+        ///
+        /// Không đổ bóng, không nhận bóng: đây là đồ hoạ chỉ dẫn, không phải vật thể trong sân.
+        /// </summary>
+        static AimTrajectoryView BuildAimTrajectory()
+        {
+            var go = new GameObject("AimTrajectory");
+
+            var path = MakeAimLine(go, "Path", new Color(1f, 0.94f, 0.30f, 0.90f), 0.075f, 0.045f);
+            var ring = MakeAimLine(go, "ImpactRing", new Color(1f, 0.45f, 0.20f, 0.95f), 0.05f, 0.05f);
+            ring.loop = true;
+
+            var view = go.AddComponent<AimTrajectoryView>();
+            var so = new SerializedObject(view);
+            Set(so, "path", path);
+            Set(so, "impactRing", ring);
+            so.ApplyModifiedPropertiesWithoutUndo();
+            return view;
+        }
+
+        static LineRenderer MakeAimLine(GameObject parent, string name, Color color, float startW, float endW)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent.transform, false);
+
+            var lr = go.AddComponent<LineRenderer>();
+            lr.useWorldSpace = true;
+            lr.positionCount = 0;
+            lr.startWidth = startW;
+            lr.endWidth = endW;
+            lr.numCapVertices = 2;
+            lr.alignment = LineAlignment.View;   // luôn quay mặt về camera, không bị mỏng đi khi nhìn nghiêng
+            lr.shadowCastingMode = ShadowCastingMode.Off;
+            lr.receiveShadows = false;
+            lr.sharedMaterial = MakeMaterial(color, lit: false);
+            lr.startColor = color;
+            lr.endColor = color;
+            lr.enabled = false;
+            return lr;
         }
 
         static void Set(SerializedObject so, string field, Object value)

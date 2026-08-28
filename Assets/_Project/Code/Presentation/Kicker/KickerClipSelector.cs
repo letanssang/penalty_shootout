@@ -27,15 +27,14 @@ namespace Eleven.Presentation.Kicker
         /// <summary>
         /// Báo trước kiểu sút. KHÔNG có tác dụng khi chân đã bắt đầu vung.
         ///
-        /// Đây không phải sự cẩn thận thừa. Với lượt của NGƯỜI CHƠI, kiểu sút chỉ ngã ngũ lúc
-        /// nhả ngón tay — tức ở pha Contact, sau khi clip sút đã chạy được vài phần mười giây.
-        /// Không chốt lại thì cú vung đang giữa chừng bị cắt và phát lại từ đầu ngay lúc bóng
-        /// rời chân. Một cú vung đã bắt đầu thì ngoài đời cũng không đổi được nữa.
+        /// Từ 2026-08-28 cả hai lượt đều chốt ý đồ TRƯỚC khung đầu tiên của đà chạy
+        /// (<c>MatchGameLoop.CommitIntent</c>), nên bình thường hàm này được gọi đúng một lần
+        /// mỗi lượt và cái chốt dưới đây không bao giờ phải làm việc.
         ///
-        /// Với lượt người chơi, <c>MatchGameLoop.PeekPlayerShotType</c> gọi hàm này mỗi khung
-        /// hình trong pha chạy đà với kết quả phân loại TẠM của cú vuốt đang dở, nên bản đọc
-        /// cuối cùng trước lúc chốt mới là clip được phát. Đổi ý sau thời điểm đó thì bóng vẫn
-        /// đi theo cử chỉ thật (vector phóng tính lúc nhả ngón), chỉ hoạt ảnh là đã cam kết.
+        /// Vẫn giữ nó, vì nó rẻ và vì nó khoá một sai lầm dễ tái phạm: <c>FireShot</c> cũng
+        /// gọi <c>PrepareFor</c>, và một ngày nào đó có người lại cho phép đổi ý muộn. Một cú
+        /// vung đã bắt đầu thì ngoài đời không đổi kiểu được; ở đây cũng vậy, nếu không thì
+        /// cú vung đang giữa chừng bị cắt và phát lại từ đầu ngay lúc bóng rời chân.
         /// </summary>
         public void PrepareFor(ShotType type)
         {

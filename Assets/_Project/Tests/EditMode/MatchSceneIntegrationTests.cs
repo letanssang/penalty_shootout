@@ -309,6 +309,10 @@ namespace Eleven.Tests.EditMode
                 "MatchGameLoop.cueSource null — KickerBoneCueSource.Sample() không được gọi, " +
                 "thủ môn mất hoàn toàn nguồn tín hiệu xương, luôn đứng giữa cầu môn.");
 
+            AssertRef(so, "aimTrajectory",
+                "MatchGameLoop.aimTrajectory null — vuốt xong không thấy đường bay dự kiến, " +
+                "người chơi phải đoán mù xem cú vuốt vừa rồi sẽ đưa bóng đi đâu.");
+
             AssertRef(so, "swipeReceiver",
                 "MatchGameLoop.swipeReceiver null — OnSwipeReleased không được đăng ký, " +
                 "người chơi vuốt nhưng không có ShotIntent nào được tạo ra.");

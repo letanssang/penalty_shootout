@@ -116,21 +116,57 @@ trả về "giữ nguyên clip cũ". Đó là cách checklist "huỷ giữa ch�
 **Chốt `_strikeLocked` khi clip sút đã bắt đầu.** Cú vung chân đang giữa chừng thì ngoài đời
 cũng không đổi kiểu sút được nữa.
 
-**Lượt người chơi giờ cũng ra đúng 4 clip, bằng cách phân loại TẠM cú vuốt đang dở
-(2026-08-28).** `ShotType` chính thức chỉ ngã ngũ lúc nhả ngón (`BuildIntent`), nhưng lúc đó
-clip sút đã phải chạy được vài phần mười giây rồi (xem lead-time ở trên). Chuỗi
-`SwipeCollector.TryPeek` → `TouchSwipeReceiver.TryPeekShotType` → `MatchGameLoop.PeekPlayerShotType`
-đọc đặc trưng cử chỉ đang diễn ra mỗi khung hình trong pha `RunUp` và gọi `PrepareFor` với kết
-quả tạm, dùng THẲNG `ShotMapper.Classify`/`SpeedT` — không có luật riêng cho bản đọc tạm, để
-hai đường phân loại không lệch nhau theo thời gian. Đoán sai chỉ phát nhầm clip; vector phóng
-vẫn tính từ cử chỉ thật lúc nhả ngón nên bóng không bao giờ sai theo animation.
+**Lượt người chơi cũng ra đúng 4 clip — vì ý đồ giờ được chốt TRƯỚC khi chạy đà
+(sửa 2026-08-28, thay hẳn cách làm cũ).** Xem mục "Sửa nhịp một lượt sút" ngay dưới đây.
 
-Giới hạn đã biết, đo bằng số: một cú vuốt dài đang ở 20–40% chặng đường đọc ra giống hệt một
-cú lốp (`SwipeProvisionalTypeTests.DocTam_CuVuotDaiDangVeDoDang_CoTheDocNhamThanhLop`). Đã thử
-chặn bằng ngưỡng thời lượng và bỏ: luật chơi cho phép giữ ngón sau khi vẽ xong cử chỉ, nên một
-cú lốp thật hoàn toàn có thể bị giữ lâu trước khi nhả — chặn theo thời lượng sẽ cướp mất hoạt
-ảnh lốp của đúng người vuốt lốp. Chấp nhận được vì lối chơi thật là vẽ nhanh rồi giữ, và có
-test riêng xác nhận bản đọc tạm hội tụ đúng kết quả trong tình huống đó.
+> **Đã gỡ:** bản đầu của T35 (commit `f139b68`) giải bài này bằng cách phân loại TẠM cú vuốt
+> đang dở mỗi khung hình trong pha `RunUp`, qua chuỗi `SwipeCollector.TryPeek` →
+> `TouchSwipeReceiver.TryPeekShotType` → `MatchGameLoop.PeekPlayerShotType`. Nó cần thiết
+> chừng nào người chơi còn vuốt GIỮA lúc chạy đà. Khi nhịp đổi thành "vuốt xong rồi mới chạy
+> đà", `ShotType` đã biết chắc từ trước khung đầu tiên của đà chạy, nên cả chuỗi đọc tạm —
+> cùng `SwipeProvisionalTypeTests` (8 test) — thành mã chết và đã xoá. `ShotMapper.SpeedT`
+> giữ lại vì `Map`/`Classify` vẫn dùng.
+
+### Sửa nhịp một lượt sút và góc máy (2026-08-28, sau buổi chơi thử trên Pixel 7)
+
+Bốn nhận xét từ người chơi thật. Ba cái sửa trong đợt này, cái thứ tư là T38.
+
+**1 · Bóng bay khi người sút còn đang chạy.** Nguyên nhân đo được: `FireShot` gọi
+`_driver.Launch` NGAY lúc nhả ngón (giữa pha `RunUp`), còn lượt máy bắn ở `IdealContactTime`
+= 80% đà chạy. Nhưng khung chạm thật của clip nằm đúng ở ranh giới `RunUp → Contact` — vì
+clip sút khởi động sớm đúng bằng `lead` và chạm ở `lead` giây sau đó. Lượt máy vì thế bắn
+sớm 0.26s; lượt người chơi sớm tuỳ lúc nhả tay. Sửa: cả hai lượt đều chốt ý đồ vào
+`_pendingIntent` rồi bắn ở **một chỗ duy nhất** — `LaunchAtContact()` gọi từ
+`OnEnterContact()`. Thời điểm bóng rời chân do PHA quyết định, không do ngón tay, nên hoạt
+ảnh khớp vật lý theo cấu trúc chứ không nhờ căn số.
+
+**2 · Bỏ cửa sổ thời điểm, chỉ còn một cử chỉ.** Trước: đặt ngón xuống là khởi động đà chạy,
+phải nhả đúng nhịp. Giờ: cả cú vuốt diễn ra trong pha `Aiming` khi người sút ĐỨNG YÊN, vuốt
+hụt thì vuốt lại; nhả ngón → dựng `ShotIntent` với `timingError = 0` → `ConfirmAim()` → chạy
+đà → sút. `TimingWindow`/`TimingWindowConfig` (T15) và `ScoreboardUI.SetTimingBar`/
+`ShowTimingGrade` không còn được vòng lặp gọi; lớp và test của chúng vẫn còn.
+Giá phải trả: không lừa được thủ môn bằng cú giật cổ tay phút chót. Đổi lại thủ môn đọc được
+tín hiệu THẬT suốt cả đà chạy — đúng thứ T18 thiết kế ra mà luật cũ vô hiệu hoá một nửa.
+
+**3 · Đường bay dự kiến.** `Presentation/Aim/AimTrajectoryView` — hai `LineRenderer`
+(quỹ đạo + vòng tròn điểm chạm ở mặt phẳng z=11), hiện ra ngay khi nhả ngón, tắt ở
+`FireShot`. Nó chạy **đúng `TrajectoryPredictor` mà cú sút thật chạy**, nên đường vẽ ra không
+phải đồ trang trí: sai lệch duy nhất là nhiễu Magnus của cú `Knuckle`. Cấp phát một lần ở
+`Awake` (`NativeArray` 96 mẫu, `Allocator.Persistent`), sau đó không cấp phát khung nào.
+
+**4 · Góc máy thấy cả người.** Bản cũ `(0, 1.38, -4.85)` fov 30 đặt máy cách người sút 2.25m
+— bàn chân rơi ra ngoài mép dưới khung hình, không tiêu cự nào cứu được. Phải lùi máy, mà
+lùi thì đụng biên `CameraAuthoredBounds.MinBounds.z = -5`. Đã kiểm lại con số -5 đó: nó là
+ước lượng thận trọng chứ không phải mép đồ hoạ thật (mặt cỏ trải z ∈ [-15, 27], khán đài
+z ∈ [-9, 17]), nên nới xuống -11.5 vẫn còn 3.5m cỏ dự phòng. Góc mới `(0, 3.4, -10.5)` nhìn
+`(0, 0, 3)` fov 26, đo ở tỉ lệ 20:9 của Pixel 7: người sút chiếm 48% chiều cao khung, bàn
+chân ở 15% tính từ đáy, đỉnh đầu (+0.26 NDC) nằm dưới vạch vôi (+0.39) nên không che khung
+thành; khung thành 33% bề ngang (792px) thay vì 42% — đó là giá bắt buộc của việc thấy cả
+người, và vẫn dư cho một đầu ngón tay.
+
+**Nhận xét thứ tư của người chơi — "thủ môn chưa dùng model đã có" — đúng, và là T38.**
+`GoalkeeperView` hiện không có `Animator` nào; `MatchSceneGenerator.BuildKeeper()` vẫn dựng
+capsule xám dù 12+ clip thủ môn Mixamo đã import.
 
 ### Nợ còn lại
 
@@ -140,7 +176,7 @@ test riêng xác nhận bản đọc tạm hội tụ đúng kết quả trong t
 | `FollowThrough` mượn `OffensiveIdle` | Nghệ thuật | Không có clip theo đà riêng. Không được dùng `PenaltyKick` — sẽ chạy đà lần hai lúc bóng đang bay |
 
 **Checklist nghiệm thu**
-- [x] Bốn `ShotType` cho ra bốn clip khác nhau, cả lượt người chơi lẫn AI — `BonKieuSut_ChoBonClipKhacNhau`, `SwipeProvisionalTypeTests`
+- [x] Bốn `ShotType` cho ra bốn clip khác nhau, cả lượt người chơi lẫn AI — `BonKieuSut_ChoBonClipKhacNhau` (lượt người chơi giờ chốt ý đồ trước đà chạy nên không cần test riêng cho nó nữa)
 - [x] `ContactNormalizedTime` khớp khung chạm bóng thật, sai số dưới 1 khung ở 60fps — `KhungCham_KhopSoDoTrongStrikeContactTsv`, đối chiếu `docs/data/strike-contact.tsv`
 - [x] Không dòng nào ghi vào `BallDriver`/`BallState`/`ShotIntent` — `LopHoatAnh_KhongThamChieuKieuVatLy` quét reflection cả namespace
 - [x] `Root`/`Hips`/`PlantFoot`/`KickFoot` không null sau khởi tạo; `KickerBoneCueSource` không phải sửa dòng nào
@@ -149,11 +185,19 @@ test riêng xác nhận bản đọc tạm hội tụ đúng kết quả trong t
 - [ ] **Chưa đo:** chi phí CPU dưới 0.15 ms trên máy thật. Cần thiết bị + T58
 
 **Trạng thái:** scene `Match.unity` đã dựng bằng X Bot thật (`MecanimKickerAnimator`, 0 tham
-chiếu `KickerAvatar`). Toàn bộ EditMode sau khi thêm phân loại tạm cho lượt người chơi
-(2026-08-28): 554 test, 553 pass, 0 fail thật, 1 skip có sẵn từ trước.
-`BurstCompatibilityTests.BallSolverStep_BurstBienDichDuoc_VaCungKetQuaVoiManaged` timeout
-180s ở lần chạy đầu (Burst compile nguội) — chạy lại riêng fixture đó (Burst cache ấm) thì
-pass ở 38s. Không liên quan tới thay đổi của task này (không đụng job Burst nào).
+chiếu `KickerAvatar`), đã dựng lại để có `AimTrajectory`. Toàn bộ EditMode sau đợt sửa nhịp
++ góc máy (2026-08-28): **546 test, 545 pass, 0 fail thật, 1 skip có sẵn từ trước**
+(546 chứ không phải 554 vì đã xoá 8 test của bản đọc tạm).
+
+`BallSolverTests.Integrate_KhongCapPhat` fail trong lượt chạy đầy đủ, pass 19/19 khi chạy
+riêng fixture `BallSolverTests`. Đây là lỗi PHÉP ĐO đã ghi nhận từ trước:
+`Is.Not.AllocatingGCMemory()` nhạy với rác các test chạy trước để lại, còn `Integrate` là
+toán struct thuần không thể cấp phát. Không liên quan tới thay đổi đợt này.
+
+`CameraDirectorTests.IsWithinAuthoredBounds_TraFalseKhiNgoaiBien` đã sửa: mốc "quá xa phía
+sau" đổi từ z=-8 sang z=-12 vì biên đã nới xuống -11.5, và thêm một khẳng định chiều ngược
+lại rằng chỗ đứng thật (0, 3.4, -10.5) nằm TRONG biên — nếu không `Apply()` sẽ kẹp nó và
+khung hình lại mất bàn chân.
 
 ---
 

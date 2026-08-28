@@ -5,6 +5,7 @@ using Eleven.Ball;
 using Eleven.Keeper;
 using Eleven.Match;
 using Eleven.Presentation;
+using Eleven.Presentation.Aim;
 using Eleven.Presentation.Kicker;
 using Eleven.Presentation.Audio;
 using Eleven.Presentation.Net;
@@ -20,21 +21,33 @@ namespace Eleven.UI
     ///
     ///   Phase 0  DeviceTier / PerfHud            (bậc máy, HUD hiệu năng)
     ///   Phase 1  BallSolver qua BallDriver, TrajectoryPredictor, GoalGeometry
-    ///   Phase 2  SwipeCollector → ShotMapper, TimingWindow, KnuckleForce
+    ///   Phase 2  SwipeCollector → ShotMapper, KnuckleForce
+    ///            (TimingWindow của T15 vẫn còn và vẫn có test, nhưng vòng lặp này không
+    ///             gọi tới nữa — xem ghi chú "MỘT CỬ CHỈ" bên dưới)
     ///   Phase 3  KickerBoneCueSource → BayesianKeeperBrain → SimpleKeeperController
     ///            → ReachEnvelope/KeeperReach → SaveResolver, ShotHistory
     ///   Phase 4  ShootoutRules, KickSequencer, MatchSave, DifficultySelector
     ///   Phase 5  CameraDirector/CameraRig, ReplayPlayer, GoalNetView, hậu kỳ va chạm
     ///   Phase 6  BenchmarkRunner/SoakTest (qua DebugHotkeys)
     ///
-    /// NHỊP MỘT LƯỢT SÚT:
-    ///   Chạm ngón tay  → chốt ngắm, người sút BẮT ĐẦU CHẠY ĐÀ (thủ môn bắt đầu đọc vị)
-    ///   Vuốt           → thân người nghiêng theo, ĐÂY LÀ TÍN HIỆU thủ môn đọc được
-    ///   Nhả ngón tay   → chấm thời điểm bằng TimingWindow rồi mới dựng ShotIntent
+    /// NHỊP MỘT LƯỢT SÚT (sửa 2026-08-28 — xem ghi chú "MỘT CỬ CHỈ" bên dưới):
+    ///   Pha Aiming   → người sút ĐỨNG YÊN. Người chơi vuốt thoải mái, vuốt hụt thì vuốt lại.
+    ///   Nhả ngón tay → dựng ShotIntent NGAY, hiện đường bay dự kiến, rồi mới chốt ngắm.
+    ///   Pha RunUp    → người sút chạy đà, thân nghiêng theo hướng đã chốt. ĐÂY LÀ TÍN HIỆU
+    ///                  thủ môn đọc được — và giờ nó trung thực, vì ý đồ đã có sẵn từ đầu đà.
+    ///   Pha Contact  → ĐÚNG khoảnh khắc này bóng mới rời chân, cho cả người lẫn máy.
     ///
-    /// Nhờ tách "nhả tay" khỏi "dựng cú sút", người chơi có thể lừa: nghiêng người một
-    /// đằng suốt đà chạy rồi giật cổ tay sang hướng khác ở khoảnh khắc cuối. Thủ môn đã
-    /// cam kết thì không được sửa hướng (T19) — đúng như sinh học của một quả 11m thật.
+    /// MỘT CỬ CHỈ, KHÔNG CÓ CỬA SỔ THỜI ĐIỂM. Bản trước bắt người chơi vừa vuốt vừa canh
+    /// nhả tay đúng lúc chân chạm bóng (TimingWindow, T15). Trên máy thật điều đó cho ra
+    /// hai lỗi cùng lúc: (a) bóng bay đi trong khi người sút còn đang chạy, vì FireShot bắn
+    /// ngay lúc nhả ngón — tức ở giữa pha RunUp, sớm hơn khung chạm bóng thật của clip;
+    /// (b) người chơi phải học một luật thứ hai chẳng liên quan gì tới việc ngắm. Nay chỉ
+    /// còn một cử chỉ: vuốt về phía góc muốn sút. Thời điểm bắn bóng do PHA quyết định,
+    /// không do ngón tay — nên hoạt ảnh và vật lý khớp nhau theo cấu trúc, không nhờ may.
+    ///
+    /// Cái giá: người chơi không còn lừa được thủ môn bằng cách giật cổ tay ở khoảnh khắc
+    /// cuối, vì lúc chạy đà thì ý đồ đã chốt. Đổi lại thủ môn đọc được tín hiệu thật suốt
+    /// cả đà chạy — chính là thứ T18 thiết kế ra mà luật cũ vô hiệu hoá một nửa.
     /// </summary>
     public sealed class MatchGameLoop : MonoBehaviour
     {
@@ -57,6 +70,8 @@ namespace Eleven.UI
         [SerializeField] private CameraRig cameraRig;
         [SerializeField] private MatchSaveLifecycle saveLifecycle;
         [SerializeField] private AudioDirector audioDirector;
+        [Tooltip("Đường bay dự kiến hiện ra sau khi người chơi vuốt xong.")]
+        [SerializeField] private AimTrajectoryView aimTrajectory;
 
         [Header("Hồ sơ độ khó thủ môn (T25)")]
         [SerializeField] private KeeperProfile easyProfile;
@@ -64,8 +79,6 @@ namespace Eleven.UI
         [SerializeField] private KeeperProfile hardProfile;
 
         [Header("Nhịp trận")]
-        [Tooltip("Thời điểm chạm bóng, tính theo tỉ lệ của pha chạy đà. Đây là tâm cửa sổ thời điểm.")]
-        [SerializeField] private float idealContactFraction = 0.80f;
         [SerializeField] private uint matchSeed = 20260827u;
 
         // ── Hằng hình học, lấy từ nguồn sự thật duy nhất ──────────────────────
@@ -78,7 +91,6 @@ namespace Eleven.UI
         private DifficultySelector _difficulty;
         private readonly ImpactPostProcessEffect _impact = new ImpactPostProcessEffect();
         private ReplayPlayer _replayPlayer;
-        private TimingWindowConfig _timingCfg = TimingWindowConfig.Default;
         private KickPhaseDurations _durations;
         private ShootoutState _state;
 
@@ -103,8 +115,12 @@ namespace Eleven.UI
         private bool _hasReplay;
         private float3 _currentAimPoint = new float3(0f, 1.22f, GoalPlaneZ);
         private float _aimLateralShift;    // người sút dạt ngang bao nhiêu mét theo hướng ngắm
-        private ShotIntent _pendingAiIntent;
-        private bool _hasPendingAiIntent;
+
+        // Ý đồ đã chốt nhưng CHƯA bắn. Cả người chơi lẫn máy đều đi qua đúng hai ô này, và
+        // cả hai đều chỉ bắn ở OnEnterContact — đó là cách duy nhất bảo đảm bóng rời chân
+        // đúng khung chạm của clip sút thay vì sớm hơn nửa giây.
+        private ShotIntent _pendingIntent;
+        private bool _hasPendingIntent;
         private bool _matchOver;
 
         // ── Replay ───────────────────────────────────────────────────────────
@@ -132,7 +148,6 @@ namespace Eleven.UI
 
         private bool IsPlayerTurn => _state.IsHomeTurn;
         private float RunUpDuration => _durations.runUp;
-        private float IdealContactTime => _durations.runUp * math.clamp(idealContactFraction, 0.2f, 0.98f);
 
         // ═══════════════════════════════════════════════════════════════════════
         //  Khởi tạo
@@ -281,7 +296,9 @@ namespace Eleven.UI
                     break;
 
                 case KickPhase.Contact:
-                    if (!_hasFired) FireScuffedShot();
+                    // Bình thường OnEnterContact đã bắn rồi. Nhánh này chỉ đỡ trường hợp
+                    // pha bị nhảy vào giữa chừng (Abort, phát lại) mà chưa qua OnEnter.
+                    if (!_hasFired) LaunchAtContact();
                     TickStrikeAnimation(dt);
                     break;
 
@@ -299,35 +316,9 @@ namespace Eleven.UI
             cameraRig?.Tick(dt);
         }
 
-        /// <summary>
-        /// Lượt người chơi: đoán kiểu sút từ cú vuốt CHƯA nhả ngón, để clip sút kịp khởi động
-        /// trong pha chạy đà.
-        ///
-        /// Vì sao phải có: khung chạm bóng nằm giữa clip (mu bàn chân chạm ở 48.9% của 1.5s),
-        /// nên hoạt ảnh phải chọn clip khoảng 0.73s TRƯỚC khi chân gặp bóng — lúc đó ngón tay
-        /// vẫn còn trên màn hình. Không có bước này thì mọi quả của người chơi đều phát clip
-        /// mu bàn chân, và ba kiểu sút còn lại chỉ tồn tại cho máy.
-        ///
-        /// Dừng đoán ngay khi animator đã sang clip sút: <c>KickerClipSelector</c> tự chốt
-        /// (<c>_strikeLocked</c>), nên gọi thêm cũng vô ích, mà lại tốn một lượt phân tích
-        /// toàn bộ mẫu mỗi khung hình.
-        /// </summary>
-        private void PeekPlayerShotType()
-        {
-            if (!IsPlayerTurn || _hasFired) return;
-            if (kicker == null || swipeReceiver == null) return;
-
-            KickerClip clip = kicker.CurrentClip;
-            if (clip != KickerClip.Idle && clip != KickerClip.RunUp) return;
-
-            if (swipeReceiver.TryPeekShotType(out ShotType provisional))
-                kicker.PrepareFor(provisional);
-        }
-
         private void TickRunUp(float dt)
         {
             float t01 = math.saturate(_seq.PhaseElapsed / math.max(0.01f, RunUpDuration));
-            PeekPlayerShotType();
             if (kicker != null)
             {
                 kicker.Tick(dt, t01);
@@ -358,7 +349,12 @@ namespace Eleven.UI
                 }
             }
 
-            float timeToContact = math.max(0f, IdealContactTime - _seq.PhaseElapsed);
+            // Chân gặp bóng ở ĐÚNG ranh giới RunUp → Contact, không sớm hơn: clip sút khởi
+            // động trước đó đúng bằng strikeLead = ContactNormalizedTime × độ dài clip, nên
+            // khung chạm rơi vào chính khoảnh khắc pha đổi. Trước đây chỗ này lấy mốc
+            // IdealContactTime (80% đà chạy) — sai 0.26s, và thủ môn đọc theo một cái đồng hồ
+            // khác với cái đồng hồ mà bóng thật sự rời chân.
+            float timeToContact = math.max(0f, RunUpDuration - _seq.PhaseElapsed);
 
             // Thủ môn đọc tín hiệu từ XƯƠNG THẬT của người sút (T17) — không phải từ ý đồ
             // cú sút. Đó là lý do lừa được thủ môn.
@@ -366,21 +362,6 @@ namespace Eleven.UI
             {
                 KeeperCues cues = cueSource.Sample(timeToContact);
                 if (goalkeeper.TickRead(cues, timeToContact, _kickSeed)) UpdateKeeperDebug();
-            }
-
-            if (IsPlayerTurn)
-            {
-                scoreboard?.SetTimingBar(true, t01,
-                    idealContactFraction,
-                    _timingCfg.perfectHalfWidthSeconds / RunUpDuration,
-                    _timingCfg.goodHalfWidthSeconds / RunUpDuration);
-            }
-            else if (!_hasFired && _seq.PhaseElapsed >= IdealContactTime)
-            {
-                // Ý đồ lẽ ra đã chốt ở đầu đà chạy; dựng bù ở đây chỉ để không bao giờ sút
-                // bằng một ShotIntent rỗng (tốc độ 0, ngắm vào gốc toạ độ).
-                if (!_hasPendingAiIntent) _pendingAiIntent = BuildAiIntent(NextKickSeed());
-                FireShot(in _pendingAiIntent);
             }
         }
 
@@ -603,42 +584,74 @@ namespace Eleven.UI
 
         private void HandleAimBegin(Vector2 screenPos)
         {
+            // Đặt ngón xuống KHÔNG còn khởi động đà chạy. Người chơi được ngắm nghía, kéo qua
+            // kéo lại, nhấc tay ra vuốt lại — chừng nào chưa nhả một cú vuốt đủ dài thì chưa
+            // có gì xảy ra cả.
             if (!IsPlayerTurn) return;
-
-            if (_seq.Phase == KickPhase.Aiming)
-            {
-                UpdateAimLean(screenPos);
-                _seq.ConfirmAim();          // chạm ngón = chốt ngắm = bắt đầu chạy đà
-            }
+            if (_seq.Phase == KickPhase.Aiming) UpdateAimLean(screenPos);
         }
 
         private void HandleAimMove(Vector2 screenPos)
         {
             if (!IsPlayerTurn) return;
-            if (_seq.Phase == KickPhase.Aiming || _seq.Phase == KickPhase.RunUp) UpdateAimLean(screenPos);
+            if (_seq.Phase == KickPhase.Aiming) UpdateAimLean(screenPos);
         }
 
         private void HandleSwipeCancelled()
         {
-            // Vuốt hụt trong lúc chạy đà: vẫn phải sút, đà đã chạy rồi. Cú sút hỏng chân.
-            if (_seq.Phase == KickPhase.RunUp && IsPlayerTurn && !_hasFired) FireScuffedShot();
+            // Vuốt hụt lúc đang ngắm thì không mất lượt: người chơi vuốt lại. Đà chạy chưa
+            // khởi động nên chẳng có gì để cứu vãn.
         }
 
+        /// <summary>
+        /// Nhả ngón tay = chốt cú sút. Bóng CHƯA bay: chỉ ghi lại ý đồ, hiện đường bay dự
+        /// kiến, rồi cho người sút chạy đà. Việc bắn bóng để dành cho <see cref="OnEnterContact"/>.
+        /// </summary>
         private void HandleSwipeReleased(SwipeFeatures features, Vector2 screenPos)
         {
-            if (!IsPlayerTurn || _hasFired) return;
-            if (_seq.Phase != KickPhase.RunUp) return;
+            if (!IsPlayerTurn || _hasFired || _hasPendingIntent) return;
+            if (_seq.Phase != KickPhase.Aiming) return;
 
-            // Chấm thời điểm nhả ngón so với khoảnh khắc chân chạm bóng (T15).
-            TimingResult timing = TimingWindow.Evaluate(_seq.PhaseElapsed, IdealContactTime, _timingCfg);
-
+            // timingError = 0: không còn cửa sổ thời điểm. Bóng đi đúng nơi ngón tay chỉ,
+            // sai số duy nhất còn lại là sai số do chính cử chỉ (ShotMapper đã lo).
             ShotIntent intent = swipeReceiver.BuildIntent(in features, screenPos, ActiveCamera,
-                                                          timing.mappedErrorSeconds, NextKickSeed());
+                                                          0f, NextKickSeed());
 
-            scoreboard?.ShowTimingGrade(timing.grade, timing.ErrorMilliseconds);
-            audioDirector?.PlayKick(math.saturate((intent.speed - 18f) / 18f));
+            CommitIntent(in intent);
+            _seq.ConfirmAim();          // chốt xong mới chạy đà
+        }
 
-            FireShot(intent);
+        /// <summary>
+        /// Chốt ý đồ cho lượt hiện tại: hoạt ảnh biết phải vung kiểu gì, thân người nghiêng
+        /// đúng hướng suốt đà chạy (thủ môn đọc được), và đường bay dự kiến hiện lên.
+        /// Dùng chung cho cả người chơi lẫn máy — một đường đi, không hai bộ luật.
+        /// </summary>
+        private void CommitIntent(in ShotIntent intent)
+        {
+            _pendingIntent = intent;
+            _hasPendingIntent = true;
+
+            ApplyAimLean(intent.aimPoint);
+            kicker?.PrepareFor(intent.type);
+
+            if (IsPlayerTurn)
+            {
+                // Khoá nhập liệu: một lượt, một cú vuốt. Không thì vuốt lần hai lúc đang chạy
+                // đà sẽ cho ra một ý đồ khác với đường bay đang vẽ trên màn hình.
+                if (swipeReceiver != null) swipeReceiver.IsInputEnabled = false;
+                ShowAimTrajectory(in intent);
+            }
+        }
+
+        /// <summary>
+        /// Vẽ đúng quỹ đạo mà cú sút sẽ đi: cùng bộ giải vận tốc phóng, cùng BallSolver.
+        /// Không có "đường minh hoạ" nào ở đây.
+        /// </summary>
+        private void ShowAimTrajectory(in ShotIntent intent)
+        {
+            if (aimTrajectory == null) return;
+            float3 v = TouchSwipeReceiver.SolveLaunchVelocity(in intent, BallParams.Default);
+            aimTrajectory.Show(new float3(0f, BallRadius, 0f), v, intent.spin);
         }
 
         /// <summary>
@@ -700,15 +713,15 @@ namespace Eleven.UI
             // Lớp hoạt ảnh NHẬN kiểu sút, không bao giờ tự quyết (định luật Phase 7).
             kicker?.PrepareFor(intent.type);
             if (swipeReceiver != null) swipeReceiver.IsInputEnabled = false;
-            if (!IsPlayerTurn) audioDirector?.PlayKick(math.saturate((intent.speed - 18f) / 18f));
-            _hasPendingAiIntent = false;
+            audioDirector?.PlayKick(math.saturate((intent.speed - 18f) / 18f));
+            aimTrajectory?.Hide();
+            _hasPendingIntent = false;
 
             goalkeeper?.OnContact();
             goalkeeper?.RememberShot(GoalFrame.CellOf(intent.aimPoint));
 
             ApplyTrailStyle(intent.type);
             scoreboard?.SetCurrentShotInfo(intent.type, intent.speed);
-            scoreboard?.SetTimingBar(false, 0f, 0f, 0f, 0f);
             scoreboard?.SetPrompt(string.Empty);
             audioDirector?.SetCrowdTension(0.85f);
 
@@ -726,7 +739,21 @@ namespace Eleven.UI
             if (cameraRig != null) cameraRig.SetBallTracking(true);
         }
 
-        /// <summary>Chạy hết đà mà không vuốt: chân chạm hụt, bóng đi yếu và lệch.</summary>
+        /// <summary>
+        /// KHOẢNH KHẮC BÓNG RỜI CHÂN. Gọi đúng một lần, ở ranh giới RunUp → Contact — nơi
+        /// khung chạm của clip sút rơi vào. Cả người chơi lẫn máy đều đi qua đây, nên
+        /// "hoạt ảnh và quả bóng khớp nhau" là một tính chất của cấu trúc chứ không phải
+        /// một con số phải chỉnh tay cho từng clip.
+        /// </summary>
+        private void LaunchAtContact()
+        {
+            if (_hasFired) return;
+
+            if (_hasPendingIntent) FireShot(in _pendingIntent);
+            else FireScuffedShot();     // hết giờ ngắm mà không vuốt
+        }
+
+        /// <summary>Hết pha ngắm mà không vuốt: chân chạm hụt, bóng đi yếu và lệch.</summary>
         private void FireScuffedShot()
         {
             uint seed = NextKickSeed();
@@ -743,8 +770,6 @@ namespace Eleven.UI
                 scatterRadius = 1.0f
             };
 
-            audioDirector?.PlayKick(0.15f);
-            scoreboard?.ShowTimingGrade(TimingGrade.Poor, _timingCfg.maxErrorSeconds * 1000f);
             FireShot(intent);
         }
 
@@ -873,6 +898,8 @@ namespace Eleven.UI
             _lastResult = KickResult.Pending;
 
             _aimLateralShift = 0f;
+            _hasPendingIntent = false;
+            aimTrajectory?.Hide();
             _driver?.ResetTo(new float3(0f, BallRadius, 0f));
             if (ballTrail != null) { ballTrail.Clear(); ballTrail.emitting = false; }
 
@@ -881,7 +908,6 @@ namespace Eleven.UI
 
             scoreboard?.HideBanner();
             scoreboard?.HideShotBadge();
-            scoreboard?.SetTimingBar(false, 0f, 0f, 0f, 0f);
             scoreboard?.SetKeeperDebug(string.Empty);
 
             cameraRig?.SetBallTracking(false);
@@ -896,7 +922,7 @@ namespace Eleven.UI
             bool player = IsPlayerTurn;
             if (swipeReceiver != null) swipeReceiver.IsInputEnabled = player;
             scoreboard?.SetPrompt(player
-                ? "CHẠM ĐỂ CHẠY ĐÀ — VUỐT VỀ PHÍA GÓC MUỐN SÚT — NHẢ ĐÚNG VÙNG XANH"
+                ? "VUỐT VỀ PHÍA GÓC MUỐN SÚT"
                 : "ĐỐI THỦ ĐANG CHUẨN BỊ SÚT…");
             audioDirector?.SetCrowdTension(0.45f);
         }
@@ -905,28 +931,22 @@ namespace Eleven.UI
         {
             cueSource?.StartRunUp();
 
-            // Máy phải chốt ý đồ NGAY LÚC NÀY, không phải lúc chạm bóng. Chốt muộn thì suốt
-            // đà chạy thân người không nghiêng đi đâu cả, thủ môn đọc ra một tín hiệu trung
-            // tính, độ tin cậy tụt xuống ~0.08 và lượt nào nó cũng đứng giữa. Đo trên máy thật
-            // 2026-08-27: đúng như vậy.
-            if (!IsPlayerTurn)
-            {
-                _pendingAiIntent = BuildAiIntent(NextKickSeed());
-                _hasPendingAiIntent = true;
-                ApplyAimLean(_pendingAiIntent.aimPoint);
-
-                // Máy biết kiểu sút ngay từ đây nên chốt luôn một lần. Người chơi thì được
-                // đoán dần mỗi khung hình trong PeekPlayerShotType.
-                kicker?.PrepareFor(_pendingAiIntent.type);
-            }
+            // Ý đồ phải có TRƯỚC khung đầu tiên của đà chạy, không phải lúc chạm bóng. Chốt
+            // muộn thì suốt đà chạy thân người không nghiêng đi đâu cả, thủ môn đọc ra một
+            // tín hiệu trung tính, độ tin cậy tụt xuống ~0.08 và lượt nào nó cũng đứng giữa.
+            // Đo trên máy thật 2026-08-27: đúng như vậy.
+            //
+            // Lượt người chơi đã chốt từ lúc nhả ngón (HandleSwipeReleased) nên tới đây chỉ
+            // còn lượt máy cần dựng. Hai lượt gặp nhau ở CommitIntent.
+            if (!IsPlayerTurn && !_hasPendingIntent) CommitIntent(BuildAiIntent(NextKickSeed()));
 
             audioDirector?.SetCrowdTension(0.70f);
-            scoreboard?.SetPrompt(IsPlayerTurn ? "NHẢ NGÓN TAY ĐÚNG LÚC CHÂN CHẠM BÓNG!" : string.Empty);
+            scoreboard?.SetPrompt(string.Empty);
         }
 
         private void OnEnterContact()
         {
-            scoreboard?.SetTimingBar(false, 0f, 0f, 0f, 0f);
+            LaunchAtContact();
         }
 
         private void OnEnterResolution()

@@ -215,17 +215,29 @@ namespace Eleven.Presentation
 
                 case CameraShot.BehindShooter:
                 default:
-                    // Khung hình này được tính chứ không chỉnh mò. Ràng buộc: (a) camera không
-                    // được ra ngoài z = -5 (biên vùng đã dựng), (b) phải thấy được quả bóng ở
-                    // chân người sút, (c) khung thành phải đủ to để ngắm bằng ngón tay.
-                    // Ở (0, 1.38, -4.85) bóng nằm dưới trục quang 13.7 độ, nên nửa góc mở dọc
-                    // phải > 13.7 độ — chọn 30 độ là vừa đủ, và khung thành chiếm ~42% bề ngang
-                    // màn hình 20:9. Hạ máy xuống 1.38m (ngang thắt lưng) là mẹo then chốt:
-                    // camera càng cao thì góc nhìn xuống quả bóng càng gắt, càng phải mở rộng
-                    // góc, và khung thành càng bé.
-                    p.position = new float3(0f, 1.38f, -4.85f);
-                    p.lookAt = new float3(0f, 1.15f, 11.0f);
-                    p.fov = 30f;
+                    // Khung hình này được tính chứ không chỉnh mò. Ràng buộc:
+                    //   (a) thấy CẢ NGƯỜI sút, từ đỉnh đầu tới bàn chân, ở chỗ đứng đầu đà
+                    //       KickerPlacement.Start = (-0.9, 0, -2.6);
+                    //   (b) thấy quả bóng ở chấm phạt đền;
+                    //   (c) khung thành đủ to để ngắm bằng ngón tay.
+                    //
+                    // Bản cũ (0, 1.38, -4.85) fov 30 vi phạm (a) và không thể không vi phạm:
+                    // người sút đứng cách máy 2.25m, bàn chân nằm dưới mép dưới khung hình
+                    // 2.2 lần nửa chiều cao. Không có tiêu cự nào sửa được — phải LÙI MÁY.
+                    //
+                    // Chọn (0, 3.4, -10.5) nhìn về (0, 0, 3) với fov 26 (dọc), tỉ lệ 20:9:
+                    //   bàn chân ở -0.70, đỉnh đầu ở +0.26 (người chiếm 48% chiều cao khung);
+                    //   quả bóng ở -0.25; xà ngang ở +0.89, vạch vôi ở +0.39;
+                    //   khung thành chiếm 33% bề ngang màn hình.
+                    // Đầu người sút (+0.26) nằm DƯỚI vạch vôi (+0.39) nên không che khung thành.
+                    //
+                    // Đánh đổi đã biết: khung thành 33% thay vì 42% bề ngang. Đó là giá bắt
+                    // buộc của (a) — muốn thấy một người cao 1.8m ở gần MÀ khung thành ở xa
+                    // vẫn to thì phải thu hẹp góc mở, mà thu hẹp góc mở lại cắt mất bàn chân.
+                    // 33% của 2400px vẫn là 792px bề ngang để ngắm, dư cho một đầu ngón tay.
+                    p.position = new float3(0f, 3.4f, -10.5f);
+                    p.lookAt = new float3(0f, 0f, 3.0f);
+                    p.fov = 26f;
                     break;
             }
 

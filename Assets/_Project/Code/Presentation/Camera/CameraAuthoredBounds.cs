@@ -3,16 +3,23 @@ using Unity.Mathematics;
 namespace Eleven.Presentation
 {
     /// <summary>
-    /// Định nghĩa và kiểm soát ranh giới hình học của vùng sân 12m đã được tác giả dựng sẵn.
+    /// Định nghĩa và kiểm soát ranh giới hình học của vùng sân đã được tác giả dựng sẵn.
     /// Đảm bảo không có bất kỳ góc quay camera nào lộ ra phần ngoài biên chưa được dựng.
     /// </summary>
     public static class CameraAuthoredBounds
     {
-        // Ranh giới không gian AABB của vùng sân 12m:
-        // Chiều ngang X: [-8m, +8m] (khung thành rộng 7.32m, tâm tại x=0)
-        // Chiều cao Y:   [0m, 6m]    (khung thành cao 2.44m, camera trên cao không vượt quá 6m)
-        // Chiều sâu Z:   [-5m, 15m]  (chấm penalty tại z=0, vạch vôi tại z=11, phía sau lưới tới z=15)
-        public static readonly float3 MinBounds = new float3(-8.0f, 0.0f, -5.0f);
+        // Ranh giới không gian AABB của vùng sân đã dựng:
+        // Chiều ngang X: [-8m, +8m]  (khung thành rộng 7.32m, tâm tại x=0)
+        // Chiều cao Y:   [0m, 6m]     (khung thành cao 2.44m, camera trên cao không vượt quá 6m)
+        // Chiều sâu Z:   [-11.5m, 15m] (chấm penalty tại z=0, vạch vôi tại z=11, sau lưới tới z=15)
+        //
+        // Biên sau NỚI TỪ -5 XUỐNG -11.5 ngày 2026-08-28. Con số -5 cũ là ước lượng thận
+        // trọng chứ không phải mép đồ hoạ thật: mặt cỏ (PitchGround, Plane scale 4.2 tại
+        // z=6) trải từ z=-15 tới z=27, khán đài hai bên từ z=-9 tới z=17. Camera sau lưng
+        // người sút phải lùi tới z≈-10.5 mới lọt CẢ NGƯỜI vào khung (xem CameraRig.PoseFor);
+        // ở đó ống kính vẫn nhìn về +z nên mọi thứ trong khung đều là phần đã dựng, và -11.5
+        // còn chừa 3.5m cỏ trước khi chạm mép mặt cỏ.
+        public static readonly float3 MinBounds = new float3(-8.0f, 0.0f, -11.5f);
         public static readonly float3 MaxBounds = new float3(8.0f, 6.0f, 15.0f);
 
         // Giới hạn góc quay của ReplayOrbit (tính bằng độ):
@@ -45,7 +52,7 @@ namespace Eleven.Presentation
                     return new float3(5.5f, 3.5f, 5.5f);
 
                 case CameraShot.BehindShooter:
-                    return new float3(0.0f, 1.6f, -2.5f);
+                    return new float3(0.0f, 3.4f, -10.5f);
 
                 case CameraShot.KeeperPOV:
                     return new float3(0.0f, 1.6f, 10.8f);
@@ -60,7 +67,7 @@ namespace Eleven.Presentation
                     return ComputeOrbitPosition(0.0f, 15.0f, 3.5f, new float3(0.0f, 1.22f, 11.0f));
 
                 default:
-                    return new float3(0.0f, 1.6f, -2.5f);
+                    return new float3(0.0f, 3.4f, -10.5f);
             }
         }
 
