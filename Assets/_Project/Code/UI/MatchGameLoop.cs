@@ -435,7 +435,21 @@ namespace Eleven.UI
 
         private void OnBallSimStep(BallState s)
         {
-            if (!_shotLive || _driver == null) return;
+            if (_driver == null) return;
+
+            // _shotLive CHỈ tắt phần PHÁN KẾT QUẢ, không được tắt va chạm.
+            //
+            // Trước 2026-08-28 hàm này thoát ngay khi _shotLive = false, mà _shotLive tắt ở
+            // OnEnterResolution trong khi BallDriver vẫn IsLive. Hệ quả: từ giây đó bóng bay
+            // bằng khí động THUẦN — không mặt cỏ, không lưới, không gì chặn — nên nó chìm
+            // xuyên qua sân và rơi mãi. Đúng ba triệu chứng người chơi báo: "biến mất khi đá
+            // lên khán đài", "biến mất khi vào lưới", "không có phản ứng với lưới".
+            if (!_shotLive)
+            {
+                _driver.ExternalAcceleration = float3.zero;
+                ApplyNetDragAndGround(s);
+                return;
+            }
 
             BallState prev = _driver.PreviousState;
             BallParams p = _driver.Parameters;
@@ -505,9 +519,16 @@ namespace Eleven.UI
 
             if (result == SaveResult.Caught)
             {
-                // Bắt dính: bóng chết trong tay, không nảy đi đâu nữa.
-                _driver.Override(new BallState(atCrossing.position, float3.zero, float3.zero));
-                _driver.Freeze();
+                // Bắt dính: bóng chết trong tay. NHƯNG đừng đóng băng nó lơ lửng giữa không
+                // trung như bản cũ. Thủ môn hiện vẫn là mấy khối trụ (T38 mới thay model),
+                // nên quả bóng đứng khựng trên không đọc ra thành LỖI chứ không thành pha bắt
+                // bóng — đúng cái người chơi báo là "không có quán tính mà dừng lại luôn".
+                // Cho nó tuột khỏi tay rơi xuống cỏ, PitchCollision sẽ đưa về nằm yên.
+                //
+                // Cũng KHÔNG Freeze ở đây nữa: Freeze cắt luôn goalNet.UpdateSimulation (chỉ
+                // chạy khi driver còn IsLive), nên mọi pha bắt dính trước đây làm tấm lưới
+                // cứng đờ giữa chừng.
+                _driver.Override(new BallState(atCrossing.position, new float3(0f, -1.2f, -0.6f), float3.zero));
                 _shotLive = false;
                 if (ballTrail != null) ballTrail.emitting = false;
                 return;
@@ -552,30 +573,17 @@ namespace Eleven.UI
 
         private void ApplyNetDragAndGround(in BallState s)
         {
-            float3 pos = s.position;
-            float3 vel = s.velocity;
-            bool changed = false;
+            // Luật va chạm nằm ở PitchCollision — thuần, không MonoBehaviour, có test riêng.
+            // Ở đây chỉ còn việc nối nó vào driver và tắt máy khi bóng đã chết.
+            bool changed = PitchCollision.Resolve(in s, BallDriver.SimDt, BallRadius,
+                                                  out BallState next, out bool atRest);
+            if (changed) _driver.Override(in next);
 
-            // Trong lòng lưới: vải hãm bóng rất nhanh, đây là thứ làm cú sút "găm" chứ không xuyên qua.
-            bool insideNet = pos.z >= GoalPlaneZ && pos.z <= GoalPlaneZ + 1.8f &&
-                             math.abs(pos.x) <= GoalFrame.Width * 0.5f && pos.y <= GoalFrame.Height;
-            if (insideNet)
+            if (atRest)
             {
-                vel *= 1f - 7.5f * BallDriver.SimDt;
-                changed = true;
+                _driver.Freeze();
+                if (ballTrail != null) ballTrail.emitting = false;
             }
-
-            // Mặt cỏ.
-            if (pos.y < BallRadius)
-            {
-                pos.y = BallRadius;
-                if (vel.y < 0f) vel.y = -vel.y * 0.45f;
-                vel.x *= 0.80f;
-                vel.z *= 0.80f;
-                changed = true;
-            }
-
-            if (changed) _driver.Override(new BallState(pos, vel, s.spin));
         }
 
         // ═══════════════════════════════════════════════════════════════════════
