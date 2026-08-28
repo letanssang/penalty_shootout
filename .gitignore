@@ -61,3 +61,16 @@ devtests.log
 device-results.xml
 # Stevedore cache config
 Stevedore.conf
+
+# Thư mục tạm của Gradle/CMake khi build Android — từng bị commit nhầm 110 file
+.utmp/
+
+# Log phiên làm việc cũ, không thuộc mã nguồn
+devtests*.log
+may1_*.log
+
+# Do gói Performance Testing sinh ra mỗi lần chạy test
+/Assets/Resources/PerformanceTestRunInfo.json
+/Assets/Resources/PerformanceTestRunInfo.json.meta
+/Assets/Resources/PerformanceTestRunSettings.json
+/Assets/Resources/PerformanceTestRunSettings.json.meta
