@@ -87,6 +87,13 @@ namespace Eleven.Editor.SceneSetup
             RenderSettings.ambientGroundColor = new Color(0.10f, 0.13f, 0.12f);
 
             // Sương mù là thứ giấu đi mép của một sân vận động chỉ dựng 12 mét.
+            //
+            // ĐÃ KIỂM ngày 2026-08-28 khi camera lùi từ z=-4.85 ra z=-10.5: sương mù tuyến
+            // tính đo theo khoảng cách TỚI CAMERA, nên lùi máy 5.65m về nguyên tắc đẩy mọi
+            // thứ sâu thêm 5.65m vào màn sương. Tính ra thì không đáng kể: khung thành từ
+            // 15.85m thành 21.5m, vẫn dưới mốc bắt đầu 26m nên KHÔNG dính sương chút nào;
+            // khán đài (z=17) từ 21.9m thành 27.5m, tức mới chỉ 1.5/36 = 4% đậm đặc. Vì vậy
+            // hai con số này giữ nguyên. Ghi lại để người sau khỏi "sửa" lại lần nữa.
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.Linear;
             RenderSettings.fogColor = new Color(0.05f, 0.07f, 0.11f);
