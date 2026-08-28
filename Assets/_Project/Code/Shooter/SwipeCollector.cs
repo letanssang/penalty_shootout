@@ -90,6 +90,26 @@ namespace Eleven.Shooter {
         /// <summary>
         /// Kết thúc cú vuốt và chạy phân tích cử chỉ sang SwipeFeatures (đơn vị cm).
         /// </summary>
+        /// <summary>
+        /// Đọc đặc trưng của cú vuốt ĐANG DIỄN RA mà không kết thúc nó và không xoá bộ đệm.
+        ///
+        /// Vì sao cần: lớp hoạt ảnh phải chọn clip sút TRƯỚC khi người chơi nhả ngón — khung
+        /// chạm bóng nằm giữa clip nên cú vung phải khởi động từ trong pha chạy đà. Nếu đợi
+        /// <see cref="End"/> thì mọi quả của người chơi đều phát clip mu bàn chân, bất kể họ
+        /// vuốt cong hay giật ngắn.
+        ///
+        /// Trả về <c>false</c> khi chưa đủ 3 mẫu — cùng ngưỡng mà <see cref="End"/> dùng, nên
+        /// bản đọc tạm không bao giờ "biết" nhiều hơn bản chính thức.
+        /// </summary>
+        public bool TryPeek(out SwipeFeatures features) {
+            if (_isDisposed || !_isCollecting || _count < 3) {
+                features = default;
+                return false;
+            }
+            features = SwipeAnalyzer.Analyze(new NativeSlice<SwipeSample>(_samples, 0, _count));
+            return true;
+        }
+
         public SwipeResult End(float2 pixelPosition, float time) {
             if (_isDisposed || !_isCollecting) {
                 return new SwipeResult {

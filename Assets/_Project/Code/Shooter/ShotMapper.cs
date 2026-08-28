@@ -40,13 +40,7 @@ namespace Eleven.Shooter {
             if (cfg == null) throw new ArgumentNullException(nameof(cfg));
 
             // ---- 1. Công suất ----------------------------------------------------------
-            float lengthT = cfg.maxSwipeLengthCm > Epsilon
-                ? math.saturate(f.length / cfg.maxSwipeLengthCm)
-                : 0f;
-            // Kẹp đầu ra đường cong: AnimationCurve có thể vọt ra ngoài [0,1] nếu tiếp tuyến
-            // bị kéo mạnh trong Inspector. Không kẹp thì lời hứa "không bao giờ vượt maxSpeed"
-            // sẽ vỡ vì một thao tác kéo chuột.
-            float speedT = math.saturate(cfg.lengthToSpeed.Evaluate(lengthT));
+            float speedT = SpeedT(f, cfg);
             float speed = math.clamp(math.lerp(cfg.minSpeed, cfg.maxSpeed, speedT),
                                      cfg.minSpeed, cfg.maxSpeed);
 
@@ -109,6 +103,24 @@ namespace Eleven.Shooter {
                 unstable      = unstable,
                 scatterRadius = scatterRadius,
             };
+        }
+
+        /// <summary>
+        /// Công suất chuẩn hoá [0,1] suy từ chiều dài cú vuốt. Tách ra khỏi <see cref="Map"/>
+        /// vì <see cref="Classify"/> cần đúng con số này, và lớp hoạt ảnh cần phân loại tạm
+        /// một cú vuốt CHƯA nhả ngón (xem TouchSwipeReceiver.TryPeekShotType). Hai chỗ tự
+        /// tính lại công thức là hai chỗ sẽ lệch nhau vào một ngày nào đó.
+        ///
+        /// Kẹp đầu ra đường cong: AnimationCurve có thể vọt ra ngoài [0,1] nếu tiếp tuyến bị
+        /// kéo mạnh trong Inspector. Không kẹp thì lời hứa "không bao giờ vượt maxSpeed" sẽ
+        /// vỡ vì một thao tác kéo chuột.
+        /// </summary>
+        public static float SpeedT(in SwipeFeatures f, ShotMappingConfig cfg) {
+            if (cfg == null) throw new ArgumentNullException(nameof(cfg));
+            float lengthT = cfg.maxSwipeLengthCm > Epsilon
+                ? math.saturate(f.length / cfg.maxSwipeLengthCm)
+                : 0f;
+            return math.saturate(cfg.lengthToSpeed.Evaluate(lengthT));
         }
 
         /// <summary>

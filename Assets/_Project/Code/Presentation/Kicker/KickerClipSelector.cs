@@ -32,9 +32,10 @@ namespace Eleven.Presentation.Kicker
         /// Không chốt lại thì cú vung đang giữa chừng bị cắt và phát lại từ đầu ngay lúc bóng
         /// rời chân. Một cú vung đã bắt đầu thì ngoài đời cũng không đổi được nữa.
         ///
-        /// Hệ quả cần biết: lượt của người chơi hiện dùng clip của <see cref="ShotType.Instep"/>
-        /// (mặc định) vì cử chỉ chưa được phân loại lúc bắt đầu chạy đà. Muốn đúng clip thì
-        /// phải phân loại tạm cử chỉ đang vuốt — việc riêng, không thuộc T35.
+        /// Với lượt người chơi, <c>MatchGameLoop.PeekPlayerShotType</c> gọi hàm này mỗi khung
+        /// hình trong pha chạy đà với kết quả phân loại TẠM của cú vuốt đang dở, nên bản đọc
+        /// cuối cùng trước lúc chốt mới là clip được phát. Đổi ý sau thời điểm đó thì bóng vẫn
+        /// đi theo cử chỉ thật (vector phóng tính lúc nhả ngón), chỉ hoạt ảnh là đã cam kết.
         /// </summary>
         public void PrepareFor(ShotType type)
         {

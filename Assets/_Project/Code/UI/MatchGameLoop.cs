@@ -299,9 +299,35 @@ namespace Eleven.UI
             cameraRig?.Tick(dt);
         }
 
+        /// <summary>
+        /// Lượt người chơi: đoán kiểu sút từ cú vuốt CHƯA nhả ngón, để clip sút kịp khởi động
+        /// trong pha chạy đà.
+        ///
+        /// Vì sao phải có: khung chạm bóng nằm giữa clip (mu bàn chân chạm ở 48.9% của 1.5s),
+        /// nên hoạt ảnh phải chọn clip khoảng 0.73s TRƯỚC khi chân gặp bóng — lúc đó ngón tay
+        /// vẫn còn trên màn hình. Không có bước này thì mọi quả của người chơi đều phát clip
+        /// mu bàn chân, và ba kiểu sút còn lại chỉ tồn tại cho máy.
+        ///
+        /// Dừng đoán ngay khi animator đã sang clip sút: <c>KickerClipSelector</c> tự chốt
+        /// (<c>_strikeLocked</c>), nên gọi thêm cũng vô ích, mà lại tốn một lượt phân tích
+        /// toàn bộ mẫu mỗi khung hình.
+        /// </summary>
+        private void PeekPlayerShotType()
+        {
+            if (!IsPlayerTurn || _hasFired) return;
+            if (kicker == null || swipeReceiver == null) return;
+
+            KickerClip clip = kicker.CurrentClip;
+            if (clip != KickerClip.Idle && clip != KickerClip.RunUp) return;
+
+            if (swipeReceiver.TryPeekShotType(out ShotType provisional))
+                kicker.PrepareFor(provisional);
+        }
+
         private void TickRunUp(float dt)
         {
             float t01 = math.saturate(_seq.PhaseElapsed / math.max(0.01f, RunUpDuration));
+            PeekPlayerShotType();
             if (kicker != null)
             {
                 kicker.Tick(dt, t01);
@@ -889,8 +915,8 @@ namespace Eleven.UI
                 _hasPendingAiIntent = true;
                 ApplyAimLean(_pendingAiIntent.aimPoint);
 
-                // Máy biết kiểu sút từ đây, nên nó được đúng clip. Người chơi thì không —
-                // cử chỉ chỉ ngã ngũ lúc nhả tay. Xem KickerClipSelector.PrepareFor.
+                // Máy biết kiểu sút ngay từ đây nên chốt luôn một lần. Người chơi thì được
+                // đoán dần mỗi khung hình trong PeekPlayerShotType.
                 kicker?.PrepareFor(_pendingAiIntent.type);
             }
 

@@ -116,16 +116,31 @@ trả về "giữ nguyên clip cũ". Đó là cách checklist "huỷ giữa ch�
 **Chốt `_strikeLocked` khi clip sút đã bắt đầu.** Cú vung chân đang giữa chừng thì ngoài đời
 cũng không đổi kiểu sút được nữa.
 
+**Lượt người chơi giờ cũng ra đúng 4 clip, bằng cách phân loại TẠM cú vuốt đang dở
+(2026-08-28).** `ShotType` chính thức chỉ ngã ngũ lúc nhả ngón (`BuildIntent`), nhưng lúc đó
+clip sút đã phải chạy được vài phần mười giây rồi (xem lead-time ở trên). Chuỗi
+`SwipeCollector.TryPeek` → `TouchSwipeReceiver.TryPeekShotType` → `MatchGameLoop.PeekPlayerShotType`
+đọc đặc trưng cử chỉ đang diễn ra mỗi khung hình trong pha `RunUp` và gọi `PrepareFor` với kết
+quả tạm, dùng THẲNG `ShotMapper.Classify`/`SpeedT` — không có luật riêng cho bản đọc tạm, để
+hai đường phân loại không lệch nhau theo thời gian. Đoán sai chỉ phát nhầm clip; vector phóng
+vẫn tính từ cử chỉ thật lúc nhả ngón nên bóng không bao giờ sai theo animation.
+
+Giới hạn đã biết, đo bằng số: một cú vuốt dài đang ở 20–40% chặng đường đọc ra giống hệt một
+cú lốp (`SwipeProvisionalTypeTests.DocTam_CuVuotDaiDangVeDoDang_CoTheDocNhamThanhLop`). Đã thử
+chặn bằng ngưỡng thời lượng và bỏ: luật chơi cho phép giữ ngón sau khi vẽ xong cử chỉ, nên một
+cú lốp thật hoàn toàn có thể bị giữ lâu trước khi nhả — chặn theo thời lượng sẽ cướp mất hoạt
+ảnh lốp của đúng người vuốt lốp. Chấp nhận được vì lối chơi thật là vẽ nhanh rồi giữ, và có
+test riêng xác nhận bản đọc tạm hội tụ đúng kết quả trong tình huống đó.
+
 ### Nợ còn lại
 
 | Nợ | Loại | Đổi ra thế nào |
 |---|---|---|
 | `StrikeKnuckle` dùng lại clip `PenaltyKick` của `StrikeInstep` | **Nghệ thuật**, không phải mã | Pack Soccer Game chỉ có 3 clip sút thật. Có clip knuckle thì sửa 1 dòng ánh xạ trong `KickerAnimatorControllerBuilder` + 2 hằng số `KnuckleLength/KnuckleContact` |
 | `FollowThrough` mượn `OffensiveIdle` | Nghệ thuật | Không có clip theo đà riêng. Không được dùng `PenaltyKick` — sẽ chạy đà lần hai lúc bóng đang bay |
-| Lượt **người chơi** luôn phát clip `Instep` | Mã, ngoài phạm vi T35 | `ShotType` chỉ biết lúc nhả ngón, khi cú vung đã bắt đầu. Cách sửa: phân loại tạm cú vuốt đang diễn ra rồi `PrepareFor` sớm. Lượt AI đã đúng (gọi `PrepareFor` ở `OnEnterRunUp`) |
 
 **Checklist nghiệm thu**
-- [x] Bốn `ShotType` cho ra bốn clip khác nhau — `BonKieuSut_ChoBonClipKhacNhau`
+- [x] Bốn `ShotType` cho ra bốn clip khác nhau, cả lượt người chơi lẫn AI — `BonKieuSut_ChoBonClipKhacNhau`, `SwipeProvisionalTypeTests`
 - [x] `ContactNormalizedTime` khớp khung chạm bóng thật, sai số dưới 1 khung ở 60fps — `KhungCham_KhopSoDoTrongStrikeContactTsv`, đối chiếu `docs/data/strike-contact.tsv`
 - [x] Không dòng nào ghi vào `BallDriver`/`BallState`/`ShotIntent` — `LopHoatAnh_KhongThamChieuKieuVatLy` quét reflection cả namespace
 - [x] `Root`/`Hips`/`PlantFoot`/`KickFoot` không null sau khởi tạo; `KickerBoneCueSource` không phải sửa dòng nào
@@ -134,7 +149,11 @@ cũng không đổi kiểu sút được nữa.
 - [ ] **Chưa đo:** chi phí CPU dưới 0.15 ms trên máy thật. Cần thiết bị + T58
 
 **Trạng thái:** scene `Match.unity` đã dựng bằng X Bot thật (`MecanimKickerAnimator`, 0 tham
-chiếu `KickerAvatar`). Toàn bộ EditMode: 546 test, 545 pass, 0 fail, 1 skip có sẵn từ trước.
+chiếu `KickerAvatar`). Toàn bộ EditMode sau khi thêm phân loại tạm cho lượt người chơi
+(2026-08-28): 554 test, 553 pass, 0 fail thật, 1 skip có sẵn từ trước.
+`BurstCompatibilityTests.BallSolverStep_BurstBienDichDuoc_VaCungKetQuaVoiManaged` timeout
+180s ở lần chạy đầu (Burst compile nguội) — chạy lại riêng fixture đó (Burst cache ấm) thì
+pass ở 38s. Không liên quan tới thay đổi của task này (không đụng job Burst nào).
 
 ---
 
