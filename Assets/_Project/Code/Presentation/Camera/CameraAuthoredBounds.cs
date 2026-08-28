@@ -52,7 +52,7 @@ namespace Eleven.Presentation
                     return new float3(5.5f, 3.5f, 5.5f);
 
                 case CameraShot.BehindShooter:
-                    return new float3(0.0f, 3.4f, -10.5f);
+                    return new float3(0.0f, 2.9f, -10.5f);
 
                 case CameraShot.KeeperPOV:
                     return new float3(0.0f, 1.6f, 10.8f);
@@ -67,7 +67,7 @@ namespace Eleven.Presentation
                     return ComputeOrbitPosition(0.0f, 15.0f, 3.5f, new float3(0.0f, 1.22f, 11.0f));
 
                 default:
-                    return new float3(0.0f, 3.4f, -10.5f);
+                    return new float3(0.0f, 2.9f, -10.5f);
             }
         }
 

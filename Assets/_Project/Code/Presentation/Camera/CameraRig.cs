@@ -225,18 +225,35 @@ namespace Eleven.Presentation
                     // người sút đứng cách máy 2.25m, bàn chân nằm dưới mép dưới khung hình
                     // 2.2 lần nửa chiều cao. Không có tiêu cự nào sửa được — phải LÙI MÁY.
                     //
-                    // Chọn (0, 3.4, -10.5) nhìn về (0, 0, 3) với fov 26 (dọc), tỉ lệ 20:9:
-                    //   bàn chân ở -0.70, đỉnh đầu ở +0.26 (người chiếm 48% chiều cao khung);
-                    //   quả bóng ở -0.25; xà ngang ở +0.89, vạch vôi ở +0.39;
-                    //   khung thành chiếm 33% bề ngang màn hình.
-                    // Đầu người sút (+0.26) nằm DƯỚI vạch vôi (+0.39) nên không che khung thành.
+                    // Bản (0, 3.4, -10.5) nhìn về (0, 0, 3) thấy được cả người, nhưng CHÚI
+                    // XUỐNG MẶT CỎ: trục ống kính hạ 14.1° so với phương ngang, mà nửa góc mở
+                    // chỉ 13°, nên đường chân trời nằm NGOÀI khung hình phía trên — toàn bộ
+                    // màn hình là cỏ với khán đài, không có lấy một mảng trời. Người chơi thử
+                    // trên Pixel 7 ngày 2026-08-28 gọi đúng tên nó: "hơi hướng nhiều xuống mặt
+                    // sân, cần ngẩng cao hơn".
                     //
-                    // Đánh đổi đã biết: khung thành 33% thay vì 42% bề ngang. Đó là giá bắt
-                    // buộc của (a) — muốn thấy một người cao 1.8m ở gần MÀ khung thành ở xa
-                    // vẫn to thì phải thu hẹp góc mở, mà thu hẹp góc mở lại cắt mất bàn chân.
-                    // 33% của 2400px vẫn là 792px bề ngang để ngắm, dư cho một đầu ngón tay.
-                    p.position = new float3(0f, 3.4f, -10.5f);
-                    p.lookAt = new float3(0f, 0f, 3.0f);
+                    // Sửa bằng cách HẠ MÁY 3.4 → 2.9 rồi NGẨNG trục lên 14.1° → 9.46°.
+                    // Hạ máy trước vì nó nới khoảng góc giữa bàn chân và xà ngang (20.8° → 18.9°),
+                    // tức là mua thêm chỗ để ngẩng mà không đội bàn chân ra khỏi mép dưới.
+                    //
+                    // Vì sao dừng đúng ở 9.46° chứ không ngẩng nữa: ngẩng thêm thì mọi thứ tụt
+                    // xuống trong khung, mà đầu người sút (gần) tụt CHẬM hơn vạch vôi (xa). Tại
+                    // 9.46° hai cái vừa chạm nhau; ngẩng quá nữa là đầu người bắt đầu che miệng
+                    // khung thành — chỗ người chơi phải ngắm. Đó là trần thật của góc này.
+                    //
+                    // Toạ độ dọc trong khung (NDC, -1 đáy … +1 đỉnh), tỉ lệ 20:9, fov 26 dọc:
+                    //   bàn chân -0.82 · đỉnh đầu +0.12 (người chiếm 47% chiều cao khung)
+                    //   quả bóng  -0.41 · vạch vôi +0.13 · xà ngang +0.63
+                    //   đường chân trời +0.72 — nay đã NẰM TRONG khung, 14% trên cùng là trời.
+                    // Bàn chân còn cách mép dưới 9% chiều cao (~98px trên 1080), đủ an toàn;
+                    // và đây là thế xấu nhất, vì chạy đà làm người sút LÙI XA máy nên chân
+                    // nhích lên chứ không tụt xuống.
+                    //
+                    // Đã kiểm khán đài không hở: mép trên khung hình ngóc 3.5°, tia nhìn dâng
+                    // 0.061m/m còn bậc khán đài dâng 0.494m/m, nên hàng 11 (trong 14 hàng, cao
+                    // 5.17m) chặn kín — dư 3 hàng.
+                    p.position = new float3(0f, 2.9f, -10.5f);
+                    p.lookAt = new float3(0f, 0.65f, 3.0f);
                     p.fov = 26f;
                     break;
             }

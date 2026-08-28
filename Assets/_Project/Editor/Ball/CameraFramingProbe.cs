@@ -65,11 +65,55 @@ namespace Eleven.Editor.SceneSetup
             Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outPath)));
             File.WriteAllBytes(outPath, tex.EncodeToPNG());
 
+            MeasureFraming(cam);
+
             Object.DestroyImmediate(tex);
             rt.Release();
             Object.DestroyImmediate(rt);
 
             Debug.Log($"[CameraFramingProbe] Đã chụp {outPath} — máy tại {pos}, nhìn {pose.lookAt}, fov {pose.fov}.");
+        }
+
+        /// <summary>
+        /// Đo khung hình bằng chính ma trận chiếu của camera rồi in ra toạ độ viewport
+        /// (0 = mép dưới/trái, 1 = mép trên/phải). Đây mới là thứ đáng tin: nó không đụng
+        /// tới ánh sáng, mà ảnh PNG ở trên thì lúc sáng lúc tối tuỳ cache Library.
+        ///
+        /// Chiều cao người sút lấy từ Bounds thật của các Renderer trong model, không phải
+        /// từ con số 1.8m đoán trên giấy — model Mixamo đứng ở tư thế nào thì đo đúng tư
+        /// thế đó.
+        /// </summary>
+        static void MeasureFraming(UnityEngine.Camera cam)
+        {
+            cam.aspect = 2400f / 1080f;   // đúng tỉ lệ Pixel 7 nằm ngang, đừng để aspect của cửa sổ editor xen vào
+
+            var kicker = GameObject.Find("Kicker");
+            if (kicker != null)
+            {
+                var rends = kicker.GetComponentsInChildren<Renderer>();
+                if (rends.Length > 0)
+                {
+                    Bounds b = rends[0].bounds;
+                    for (int i = 1; i < rends.Length; i++) b.Encapsulate(rends[i].bounds);
+                    Report(cam, "bàn chân người sút", new Vector3(b.center.x, b.min.y, b.center.z));
+                    Report(cam, "đỉnh đầu người sút", new Vector3(b.center.x, b.max.y, b.center.z));
+                    Debug.Log($"[CameraFramingProbe] người sút đứng tại {b.center}, cao {b.size.y:F2}m");
+                }
+            }
+
+            Report(cam, "quả bóng", new Vector3(0f, 0.11f, 0f));
+            Report(cam, "vạch vôi khung thành", new Vector3(0f, 0f, 11f));
+            Report(cam, "xà ngang", new Vector3(0f, 2.44f, 11f));
+            Report(cam, "cột trái", new Vector3(-3.66f, 1.22f, 11f));
+            Report(cam, "cột phải", new Vector3(3.66f, 1.22f, 11f));
+            Report(cam, "hàng khán đài cuối", new Vector3(0f, 6.01f, 26.5f));
+        }
+
+        static void Report(UnityEngine.Camera cam, string what, Vector3 world)
+        {
+            Vector3 v = cam.WorldToViewportPoint(world);
+            string warn = (v.z <= 0f || v.x < 0f || v.x > 1f || v.y < 0f || v.y > 1f) ? "  ⚠ NGOÀI KHUNG" : "";
+            Debug.Log($"[CameraFramingProbe] {what,-24} ngang {v.x:F3}  dọc {v.y:F3}  xa {v.z:F1}m{warn}");
         }
     }
 }

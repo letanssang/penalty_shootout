@@ -78,7 +78,7 @@ namespace Eleven.Tests.EditMode
 
             // Và chốt luôn chiều ngược lại: chỗ đứng thật của góc sau lưng người sút phải
             // nằm trong biên, nếu không thì Apply() sẽ kẹp nó và khung hình lại mất bàn chân.
-            Assert.IsTrue(director.IsWithinAuthoredBounds(new float3(0.0f, 3.4f, -10.5f)));
+            Assert.IsTrue(director.IsWithinAuthoredBounds(new float3(0.0f, 2.9f, -10.5f)));
         }
 
         [Test]
