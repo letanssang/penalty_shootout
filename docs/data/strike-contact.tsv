@@ -1,0 +1,5 @@
+clip	seconds	kickFoot	kickSpeed_m_s	contact_t_s	contact_norm	frame	ankleY_cm	plantSpeed_at_contact	canhbao
+PenaltyKick	1.500	PHAI	11.17	0.733	0.4889	44	14.4	0.09	ok
+KickSoccerball_A	0.567	TRAI	7.85	0.517	0.9118	31	13.6	0.00	ok
+KickSoccerball_B	0.500	PHAI	6.50	0.417	0.8333	25	15.5	0.00	ok
+StrikeForwardJog	1.300	PHAI	14.19	0.400	0.3077	24	22.7	0.00	ok

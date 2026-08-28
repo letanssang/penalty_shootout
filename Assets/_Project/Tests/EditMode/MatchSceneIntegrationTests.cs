@@ -294,9 +294,16 @@ namespace Eleven.Tests.EditMode
                 "MatchGameLoop.goalkeeper null — thủ môn không được gọi TickRead/TickDive, " +
                 "đứng im như tượng, mọi cú sút đều ghi bàn không cần kỹ thuật.");
 
-            AssertRef(so, "kicker",
-                "MatchGameLoop.kicker null — hoạt ảnh chạy đà/đặt chân/đá bóng không chạy, " +
-                "người sút biến mất hoàn toàn khỏi màn hình.");
+            // Hai ô người sút: model Humanoid (T35) và greybox dự phòng. MatchGameLoop chọn
+            // model nếu có. Trống CẢ HAI mới là hỏng — nên không dùng AssertRef cho từng ô.
+            Assert.That(so.FindProperty("kickerModel"), Is.Not.Null,
+                "Không tìm thấy trường 'kickerModel' trong MatchGameLoop.");
+            Assert.That(so.FindProperty("kickerGreybox"), Is.Not.Null,
+                "Không tìm thấy trường 'kickerGreybox' trong MatchGameLoop.");
+            Assert.That(so.FindProperty("kickerModel").objectReferenceValue != null
+                     || so.FindProperty("kickerGreybox").objectReferenceValue != null, Is.True,
+                "Cả kickerModel lẫn kickerGreybox đều null — hoạt ảnh chạy đà/đặt chân/đá bóng " +
+                "không chạy, người sút biến mất hoàn toàn khỏi màn hình.");
 
             AssertRef(so, "cueSource",
                 "MatchGameLoop.cueSource null — KickerBoneCueSource.Sample() không được gọi, " +

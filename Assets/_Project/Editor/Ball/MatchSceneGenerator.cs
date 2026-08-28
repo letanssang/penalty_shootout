@@ -9,6 +9,7 @@ using Eleven.Core;
 using Eleven.Keeper;
 using Eleven.Match;
 using Eleven.Presentation;
+using Eleven.Presentation.Kicker;
 using Eleven.Presentation.Audio;
 using Eleven.Presentation.Crowd;
 using Eleven.Presentation.Diagnostics;
@@ -56,10 +57,10 @@ namespace Eleven.Editor.SceneSetup
 
             GameObject ball = BuildBall(out TrailRenderer trail);
             GoalkeeperView keeper = BuildKeeper();
-            KickerAvatar kicker = BuildKicker();
+            BuildKicker(out var kickerModel, out var kickerGreybox);
 
             UnityEngine.Camera cam = BuildCamera(out CameraRig rig);
-            BuildSystems(ball, trail, netView, keeper, kicker, rig, cam);
+            BuildSystems(ball, trail, netView, keeper, kickerModel, kickerGreybox, rig, cam);
 
             Directory.CreateDirectory(Path.GetDirectoryName(ScenePath));
             EditorSceneManager.SaveScene(scene, ScenePath);
@@ -364,13 +365,49 @@ namespace Eleven.Editor.SceneSetup
             return view;
         }
 
-        static KickerAvatar BuildKicker()
+        const string KickerModelPath = "Assets/_Project/Art/Characters/XBot.fbx";
+        const string KickerControllerPath = "Assets/_Project/Art/Animations/KickerAnimator.controller";
+
+        /// <summary>
+        /// Dựng người sút. Ưu tiên model Humanoid + Mecanim (T35); nếu thiếu model hoặc
+        /// controller thì lùi về greybox primitive để scene vẫn dựng được.
+        ///
+        /// Cả hai đi chung <c>IKickerAnimator</c>, nên <c>MatchGameLoop</c> không biết mình
+        /// đang lái cái nào — đó là lý do chỗ này được phép có hai nhánh mà chỗ khác thì không.
+        /// </summary>
+        static void BuildKicker(out MecanimKickerAnimator model, out KickerAvatar greybox)
         {
-            var go = new GameObject("Kicker");
-            var avatar = go.AddComponent<KickerAvatar>();
-            avatar.BuildGreybox();
-            avatar.ResetToStart(new float3(0f, BallR, 0f));
-            return avatar;
+            model = null;
+            greybox = null;
+
+            var fbx = AssetDatabase.LoadAssetAtPath<GameObject>(KickerModelPath);
+            var controller = AssetDatabase.LoadAssetAtPath<RuntimeAnimatorController>(KickerControllerPath);
+            var avatarAsset = AssetDatabase.LoadAssetAtPath<Avatar>(KickerModelPath);
+
+            if (fbx != null && controller != null && avatarAsset != null && avatarAsset.isHuman)
+            {
+                var go = (GameObject)PrefabUtility.InstantiatePrefab(fbx);
+                go.name = "Kicker";
+
+                var animator = go.GetComponent<Animator>() ?? go.AddComponent<Animator>();
+                animator.avatar = avatarAsset;
+                animator.runtimeAnimatorController = controller;
+                animator.applyRootMotion = false;   // lý do: xem AdvanceRunUp trong MecanimKickerAnimator
+                animator.cullingMode = AnimatorCullingMode.AlwaysAnimate;
+
+                model = go.AddComponent<MecanimKickerAnimator>();
+                go.transform.position = (Vector3)(float3)KickerPlacement.Start;
+                return;
+            }
+
+            Debug.LogWarning($"[MatchSceneGenerator] Thiếu {KickerModelPath} hoặc {KickerControllerPath} " +
+                             "(hoặc Avatar không phải Humanoid) — dựng người sút greybox thay thế. " +
+                             "Chạy Eleven ▸ Art ▸ Build Kicker Animator Controller rồi dựng lại scene.");
+
+            var fallback = new GameObject("Kicker");
+            greybox = fallback.AddComponent<KickerAvatar>();
+            greybox.BuildGreybox();
+            greybox.ResetToStart(new float3(0f, BallR, 0f));
         }
 
         static UnityEngine.Camera BuildCamera(out CameraRig rig)
@@ -398,7 +435,8 @@ namespace Eleven.Editor.SceneSetup
         // ═══════════════════════════════════════════════════════════════════════
 
         static void BuildSystems(GameObject ball, TrailRenderer trail, GoalNetView net,
-                                 GoalkeeperView keeper, KickerAvatar kicker,
+                                 GoalkeeperView keeper,
+                                 MecanimKickerAnimator kickerModel, KickerAvatar kickerGreybox,
                                  CameraRig rig, UnityEngine.Camera cam)
         {
             // Phase 0 — bậc thiết bị. Không có nó thì DeviceTier.CurrentProfile mãi null.
@@ -441,7 +479,8 @@ namespace Eleven.Editor.SceneSetup
             Set(so, "ballTrail", trail);
             Set(so, "goalNet", net);
             Set(so, "goalkeeper", keeper);
-            Set(so, "kicker", kicker);
+            Set(so, "kickerModel", kickerModel);
+            Set(so, "kickerGreybox", kickerGreybox);
             Set(so, "cueSource", cues);
             Set(so, "swipeReceiver", swipe);
             Set(so, "scoreboard", scoreboard);

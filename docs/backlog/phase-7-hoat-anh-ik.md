@@ -4,7 +4,7 @@
 
 # PHASE 7 — Hoạt ảnh và IK
 
-**6 task · tuần 11–14**
+**6 task · tuần 11–14 · đã xong 1/6 (T35)**
 
 Đây là phần code được của mốc **M3**. Phase này thay hai hình nhân bóng xám bằng nhân vật
 thật, và đó là chỗ dự án dễ tự bắn vào chân nhất: chỉ cần để animation chạm vào vật lý một
@@ -39,11 +39,11 @@ trả lời được.
 
 ---
 
-## T35 — Máy trạng thái hoạt ảnh người sút
+## T35 — Máy trạng thái hoạt ảnh người sút ✅ XONG (2026-08-28)
 
-**Phụ thuộc:** T23 · **Ước lượng:** ~2 ngày
+**Phụ thuộc:** T23 · **Ước lượng:** ~2 ngày · **Thực tế:** 1 ngày
 
-`KickerAvatar` hiện lái từng khớp bằng hàm lượng giác theo `t01` — đủ cho bản demo bóng xám,
+`KickerAvatar` lái từng khớp bằng hàm lượng giác theo `t01` — đủ cho bản demo bóng xám,
 không đủ cho nhân vật thật. Task này dựng lớp điều khiển đứng giữa `KickPhase` và `Animator`,
 và giữ nguyên hợp đồng transform mà `KickerBoneCueSource` đang đọc.
 
@@ -51,37 +51,90 @@ và giữ nguyên hợp đồng transform mà `KickerBoneCueSource` đang đọc
 `ShotMapper` (T14) sinh ra từ cử chỉ; animation chỉ chọn clip tương ứng. Làm ngược lại là
 để animation quyết định gameplay.
 
+### Đã dựng những gì
+
+| File | Vai trò |
+|---|---|
+| `Code/Presentation/Kicker/KickerClip.cs` | 9 giá trị enum, tên **trùng từng ký tự** với tên state trong controller |
+| `Code/Presentation/Kicker/IKickerAnimator.cs` | Hợp đồng; cả model thật lẫn greybox đều hiện thực |
+| `Code/Presentation/Kicker/KickerClipSelector.cs` | Struct thuần, không tham chiếu UnityEngine — nơi chứa toàn bộ logic chọn clip |
+| `Code/Presentation/Kicker/MecanimKickerAnimator.cs` | Bám vào `Animator` của X Bot, `CrossFadeInFixedTime` theo hash |
+| `Code/Presentation/Kicker/KickerPlacement.cs` | Một nguồn sự thật cho vị trí xuất phát/trụ, để greybox và model không lệch nhau |
+| `Editor/Art/KickerAnimatorControllerBuilder.cs` | Sinh `KickerAnimator.controller`: 9 state, 0 transition, 0 parameter |
+| `Editor/Art/StrikeContactProbe.cs` → `docs/data/strike-contact.tsv` | Đo khung chạm bóng bằng máy, không đoán bằng mắt |
+| `Tests/EditMode/KickerAnimatorTests.cs` | 12 test phủ hết checklist bên dưới |
+
+### Hợp đồng thực tế (khác bản phác ban đầu)
+
 ```csharp
 namespace Eleven.Presentation.Kicker {
-  public enum KickerClip { Idle, RunUp, StrikeInstep, StrikeInsideFoot,
-                           StrikeChip, StrikeKnuckle, FollowThrough, Celebrate, Dejected }
+  public enum KickerClip : byte { Idle, RunUp, StrikeInstep, StrikeInsideFoot,
+                                  StrikeChip, StrikeKnuckle, FollowThrough, Celebrate, Dejected }
 
   public interface IKickerAnimator {
     KickerClip CurrentClip { get; }
     float NormalizedTime { get; }
+    float ContactNormalizedTime { get; }
 
     void PrepareFor(ShotType type);
+    void SetOutcome(KickResult result);                            // BỔ SUNG
     void OnPhaseChanged(KickPhase oldPhase, KickPhase newPhase);
     void Tick(float dt, float phaseProgress01);
+    void SetAimYawDegrees(float yawDegrees);                       // BỔ SUNG
+    void ResetToStart(Unity.Mathematics.float3 ballPosition);      // BỔ SUNG
+    void SetRunUpDuration(float seconds);                          // BỔ SUNG
 
-    Transform Root { get; }
-    Transform Hips { get; }
-    Transform PlantFoot { get; }
-    Transform KickFoot { get; }
-
-    float ContactNormalizedTime { get; }
+    Transform Root { get; } Transform Hips { get; }
+    Transform PlantFoot { get; } Transform KickFoot { get; }
   }
 }
 ```
 
+Bốn thành viên bổ sung, và lý do từng cái — không phải tiện tay thêm:
+
+- **`SetOutcome`** — thiếu nó thì `Celebrate` và `Dejected` là hai state không đường tới. Bản
+  phác có clip ăn mừng nhưng không có kênh nào báo kết quả vào lớp hoạt ảnh.
+- **`SetRunUpDuration`** — scene `Match` ghi đè `runUp = 1.30s` trong khi mặc định là `0.90s`.
+  Hardcode thời lượng vào animator là để hai nguồn sự thật cùng tồn tại rồi lệch nhau.
+- **`ResetToStart` / `SetAimYawDegrees`** — `KickerAvatar` đã có sẵn hai hàm này và
+  `MatchGameLoop` đang gọi. Đưa vào hợp đồng để hai bản hiện thực thay được cho nhau, chứ
+  không phải để `MatchGameLoop` rẽ nhánh theo kiểu cụ thể. `SetAimYawDegrees` ở bản Mecanim
+  hiện là chỗ đặt sẵn (chưa xoay thân theo hướng ngắm) — xem T37.
+
+### Quyết định thiết kế đáng ghi
+
+**Clip sút phải bắt đầu TRONG pha RunUp, không phải ở pha Contact.** Khung chạm bóng nằm
+giữa clip (`PenaltyKick` chạm ở 48.9% của 1.500s = 0.733s). Nếu đợi tới pha `Contact` mới
+phát thì bóng đã bay được 0.733s trước khi chân chạm tới nó. Nên `MecanimKickerAnimator`
+tính `lead = contactNorm × length` rồi đổi clip khi `runUpSecondsRemaining <= lead`.
+Kiểm tra vừa: `0.733s ≤ 0.90s` (mặc định) và `≤ 1.30s` (scene Match).
+
+**`KickerClipSelector.Resolve` là hàm toàn phần trên cả 8 `KickPhase`.** Không có nhánh nào
+trả về "giữ nguyên clip cũ". Đó là cách checklist "huỷ giữa chừng không kẹt tư thế" được bảo
+đảm bằng cấu trúc thay vì bằng một danh sách dọn dẹp mà ai đó phải nhớ cập nhật.
+
+**Chốt `_strikeLocked` khi clip sút đã bắt đầu.** Cú vung chân đang giữa chừng thì ngoài đời
+cũng không đổi kiểu sút được nữa.
+
+### Nợ còn lại
+
+| Nợ | Loại | Đổi ra thế nào |
+|---|---|---|
+| `StrikeKnuckle` dùng lại clip `PenaltyKick` của `StrikeInstep` | **Nghệ thuật**, không phải mã | Pack Soccer Game chỉ có 3 clip sút thật. Có clip knuckle thì sửa 1 dòng ánh xạ trong `KickerAnimatorControllerBuilder` + 2 hằng số `KnuckleLength/KnuckleContact` |
+| `FollowThrough` mượn `OffensiveIdle` | Nghệ thuật | Không có clip theo đà riêng. Không được dùng `PenaltyKick` — sẽ chạy đà lần hai lúc bóng đang bay |
+| Lượt **người chơi** luôn phát clip `Instep` | Mã, ngoài phạm vi T35 | `ShotType` chỉ biết lúc nhả ngón, khi cú vung đã bắt đầu. Cách sửa: phân loại tạm cú vuốt đang diễn ra rồi `PrepareFor` sớm. Lượt AI đã đúng (gọi `PrepareFor` ở `OnEnterRunUp`) |
+
 **Checklist nghiệm thu**
-- [ ] Bốn `ShotType` cho ra bốn clip khác nhau, kiểm bằng test đọc `CurrentClip` sau `PrepareFor`
-- [ ] `ContactNormalizedTime` khớp khung hình chạm bóng thật của clip, sai số dưới 1 khung ở 60fps
-- [ ] Không một dòng nào trong lớp này ghi vào `BallDriver`, `BallState`, hay `ShotIntent` — kiểm bằng test hygiene quét assembly
-- [ ] `Root`/`Hips`/`PlantFoot`/`KickFoot` không bao giờ null sau khi khởi tạo; `KickerBoneCueSource` chạy được không cần sửa dòng nào
-- [ ] Đổi pha giữa chừng (người chơi huỷ vuốt) không để nhân vật kẹt ở tư thế dở — có test đi qua cả 8 pha theo thứ tự và cả trường hợp `Abort`
-- [ ] Không cấp phát bộ nhớ trong `Tick` — 0 byte GC, đo bằng test đã có kiểu `..._KhongCapPhatGC`
-- [ ] Đo trên máy thật: chi phí CPU của lớp điều khiển dưới **0.15 ms** (ngân sách, chưa đo)
+- [x] Bốn `ShotType` cho ra bốn clip khác nhau — `BonKieuSut_ChoBonClipKhacNhau`
+- [x] `ContactNormalizedTime` khớp khung chạm bóng thật, sai số dưới 1 khung ở 60fps — `KhungCham_KhopSoDoTrongStrikeContactTsv`, đối chiếu `docs/data/strike-contact.tsv`
+- [x] Không dòng nào ghi vào `BallDriver`/`BallState`/`ShotIntent` — `LopHoatAnh_KhongThamChieuKieuVatLy` quét reflection cả namespace
+- [x] `Root`/`Hips`/`PlantFoot`/`KickFoot` không null sau khởi tạo; `KickerBoneCueSource` không phải sửa dòng nào
+- [x] Đổi pha giữa chừng không kẹt tư thế — `MoiPha_ChoRaDungMotClip_KhongPhaNaoKet` + `HuyGiuaChung_VeIdle_KhongGiuKetQuaLuotTruoc`
+- [x] Không cấp phát trong `Tick` — `Tick_KhongCapPhatGC`, `Resolve_KhongCapPhatGC`
+- [ ] **Chưa đo:** chi phí CPU dưới 0.15 ms trên máy thật. Cần thiết bị + T58
+
+**Trạng thái:** scene `Match.unity` đã dựng bằng X Bot thật (`MecanimKickerAnimator`, 0 tham
+chiếu `KickerAvatar`). Toàn bộ EditMode: 546 test, 545 pass, 0 fail, 1 skip có sẵn từ trước.
 
 ---
 
@@ -283,7 +336,7 @@ namespace Eleven.Presentation.Skin {
 ## Thứ tự làm và chỗ song song được
 
 ```
-T35 ──┬── T36 ── T37
+T35 (đã xong) ──┬── T36 ── T37
       │            
       └── T38      
            │       
@@ -292,7 +345,7 @@ T35 ──┬── T36 ── T37
 T31 (đã xong) ── T40
 ```
 
-- **T35 trước tiên**, mọi thứ khác treo vào nó.
+- ~~**T35 trước tiên**~~ — đã xong 2026-08-28. T36 và T38 mở khoá.
 - **T36 và T38 song song được** — một người sút, một thủ môn, không đụng file nhau.
 - **T37 phải làm sau T36**, vì mốc chân trụ chỉ đứng yên khi IK đã ổn định.
 - **T39 làm cuối**, nhưng viết checklist của nó **trước khi** bắt đầu T36 — biết trước mình

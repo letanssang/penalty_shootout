@@ -3,13 +3,16 @@
 // không dùng Animator, không dùng model hay asset ngoài.
 // Assembly: Eleven.Presentation (tham chiếu Unity.Mathematics).
 
+using Eleven.Match;
+using Eleven.Presentation.Kicker;
+using Eleven.Shooter;
 using UnityEngine;
 using Unity.Mathematics;
 
 namespace Eleven.Presentation
 {
     [DisallowMultipleComponent]
-    public sealed class KickerAvatar : MonoBehaviour
+    public sealed class KickerAvatar : MonoBehaviour, IKickerAnimator
     {
         // ─── Hằng số vị trí chạy đà ───────────────────────────────────────────
         // Người sút xuất phát từ phía sau-trái bóng, kết thúc cạnh bóng bên trái
@@ -494,5 +497,99 @@ namespace Eleven.Presentation
             if (_rUpperArm != null)
                 _rUpperArm.localRotation = Quaternion.Euler(0f, 0f, 20f);
         }
+
+        // ══════════════════════════════════════════════════════════════════════
+        // IKickerAnimator — bộ chuyển tiếp (T35)
+        //
+        // Greybox và model thật đi CHUNG một interface thay vì để MatchGameLoop rẽ nhánh
+        // "nếu có model thì…". Nhánh đó là chỗ hai đường đi lặng lẽ phân kỳ: sửa nhịp ở một
+        // bên, quên bên kia, rồi tháng sau không ai nhớ bên nào mới đúng.
+        //
+        // Chọn clip do KickerClipSelector lo — cùng một hàm, cùng bộ kiểm thử với
+        // MecanimKickerAnimator. Ở đây chỉ dịch clip đã chọn ra các Tick* thủ công sẵn có.
+        // ══════════════════════════════════════════════════════════════════════
+
+        /// <summary>Cú đá greybox quét trong 0.45 s và chạm bóng ở t01 ≈ 0.35 — xem
+        /// <see cref="TickStrike"/>. Hai số này định ra thời điểm bật clip sút.</summary>
+        const float k_StrikeSeconds = 0.45f;
+        const float k_StrikeContactNorm = 0.35f;
+
+        KickerClipSelector _selector;
+        KickPhase _phase = KickPhase.Complete;
+        KickerClip _clip = KickerClip.Idle;
+        float _strikeElapsed;
+
+        KickerClip IKickerAnimator.CurrentClip => _clip;
+
+        float IKickerAnimator.NormalizedTime => math.saturate(_strikeElapsed / k_StrikeSeconds);
+
+        float IKickerAnimator.ContactNormalizedTime
+            => _clip >= KickerClip.StrikeInstep && _clip <= KickerClip.StrikeKnuckle
+                ? k_StrikeContactNorm : 0f;
+
+        void IKickerAnimator.PrepareFor(ShotType type) => _selector.PrepareFor(type);
+
+        void IKickerAnimator.SetOutcome(KickResult result) => _selector.SetOutcome(result);
+
+        void IKickerAnimator.OnPhaseChanged(KickPhase oldPhase, KickPhase newPhase)
+        {
+            if (newPhase == KickPhase.Placing)
+            {
+                _selector.Reset();
+                _strikeElapsed = 0f;
+            }
+            _phase = newPhase;
+        }
+
+        void IKickerAnimator.Tick(float dt, float phaseProgress01)
+        {
+            float remaining = _phase == KickPhase.RunUp
+                ? math.max(0f, (1f - math.saturate(phaseProgress01)) * _runUpDuration)
+                : 0f;
+
+            var next = _selector.Resolve(_phase, remaining, k_StrikeSeconds * k_StrikeContactNorm);
+            bool isStrike = next >= KickerClip.StrikeInstep && next <= KickerClip.StrikeKnuckle;
+
+            if (next != _clip)
+            {
+                _clip = next;
+                if (isStrike)
+                {
+                    _strikeElapsed = 0f;
+                    _selector.LockStrike();
+                }
+            }
+
+            switch (next)
+            {
+                case KickerClip.Idle:
+                    TickIdle(dt);
+                    break;
+                case KickerClip.RunUp:
+                    TickRunUp(math.saturate(phaseProgress01));
+                    break;
+                default:
+                    if (isStrike)
+                    {
+                        _strikeElapsed += dt;
+                        if (_strikeElapsed <= k_StrikeSeconds)
+                        {
+                            TickStrike(math.saturate(_strikeElapsed / k_StrikeSeconds));
+                            break;
+                        }
+                    }
+                    // Ăn mừng/cúi đầu chưa có tư thế riêng cho greybox; về trung lập là
+                    // trung thực hơn đứng đơ giữa cú vung.
+                    TickFollowThrough(dt);
+                    break;
+            }
+        }
+
+        float _runUpDuration = 0.90f;
+
+        /// <summary>Đồng bộ với nhịp trận đang chạy. Không có nó thì clip sút bật sai lúc
+        /// mỗi khi ai đó chỉnh <c>KickPhaseDurations.runUp</c>.</summary>
+        public void SetRunUpDuration(float seconds) => _runUpDuration = math.max(0.01f, seconds);
+
     }
 }

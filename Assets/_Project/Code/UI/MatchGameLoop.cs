@@ -5,6 +5,7 @@ using Eleven.Ball;
 using Eleven.Keeper;
 using Eleven.Match;
 using Eleven.Presentation;
+using Eleven.Presentation.Kicker;
 using Eleven.Presentation.Audio;
 using Eleven.Presentation.Net;
 using Eleven.Shooter;
@@ -42,7 +43,14 @@ namespace Eleven.UI
         [SerializeField] private TrailRenderer ballTrail;
         [SerializeField] private GoalNetView goalNet;
         [SerializeField] private GoalkeeperView goalkeeper;
-        [SerializeField] private KickerAvatar kicker;
+        [Tooltip("Người sút greybox. Để trống nếu dùng model Humanoid ở ô dưới.")]
+        [SerializeField] private KickerAvatar kickerGreybox;
+
+        [Tooltip("Người sút dùng model Humanoid + Mecanim (T35). Ưu tiên hơn greybox.")]
+        [SerializeField] private MecanimKickerAnimator kickerModel;
+
+        // Một đường đi duy nhất cho cả hai. Xem ghi chú ở cuối KickerAvatar.cs.
+        private IKickerAnimator kicker;
         [SerializeField] private KickerBoneCueSource cueSource;
         [SerializeField] private TouchSwipeReceiver swipeReceiver;
         [SerializeField] private ScoreboardUI scoreboard;
@@ -164,6 +172,11 @@ namespace Eleven.UI
 
             if (goalNet != null) goalNet.Initialize();
 
+            // Model thật thắng greybox khi cả hai cùng được gán — greybox chỉ là thứ để
+            // trận đấu vẫn chạy được khi chưa có tài sản nghệ thuật nào.
+            kicker = kickerModel != null ? (IKickerAnimator)kickerModel : kickerGreybox;
+            kicker?.SetRunUpDuration(RunUpDuration);
+
             if (cueSource != null && kicker != null)
             {
                 cueSource.SetBones(kicker.Root, kicker.PlantFoot, kicker.Hips);
@@ -254,11 +267,11 @@ namespace Eleven.UI
             switch (_seq.Phase)
             {
                 case KickPhase.Placing:
-                    kicker?.TickIdle(dt);
+                    TickKicker(dt);
                     break;
 
                 case KickPhase.Aiming:
-                    kicker?.TickIdle(dt);
+                    TickKicker(dt);
                     // Máy không có ngón tay: nó "chốt ngắm" sau một nhịp thở cho người xem kịp nhìn.
                     if (!IsPlayerTurn && _seq.PhaseElapsed > 0.65f) _seq.ConfirmAim();
                     break;
@@ -291,7 +304,7 @@ namespace Eleven.UI
             float t01 = math.saturate(_seq.PhaseElapsed / math.max(0.01f, RunUpDuration));
             if (kicker != null)
             {
-                kicker.TickRunUp(t01);
+                kicker.Tick(dt, t01);
 
                 // Dạt ngang dần theo hướng ngắm — tín hiệu nặng ký nhất trong bảng của T18
                 // (trọng số 1.0). Dùng sqrt(t01) chứ không phải t01: thủ môn cam kết ở khoảng
@@ -299,9 +312,9 @@ namespace Eleven.UI
                 // ±0.20m mà T18 mong đợi. sqrt cho 0.17m ở đúng thời điểm đó, vẫn giữ nguyên
                 // tính chất "lộ dần".
                 float reveal = _aimLateralShift * math.sqrt(t01);
-                Vector3 kp = kicker.transform.position;
+                Vector3 kp = kicker.Root.position;
                 kp.x += reveal;
-                kicker.transform.position = kp;
+                kicker.Root.position = kp;
 
                 // MỐC 0 CỦA TÍN HIỆU CHÂN TRỤ, ĐẶT LẠI MỖI KHUNG HÌNH.
                 // T18 kỳ vọng plantFootLateralOffset nằm trong ±0.20m quanh 0. Chân trụ thì
@@ -349,10 +362,19 @@ namespace Eleven.UI
         {
             if (_strikeTimer < 0f) return;
             _strikeTimer += dt;
+            TickKicker(dt);
+        }
 
-            const float StrikeSeconds = 0.45f;
-            if (_strikeTimer <= StrikeSeconds) kicker?.TickStrike(math.saturate(_strikeTimer / StrikeSeconds));
-            else kicker?.TickFollowThrough(dt);
+        /// <summary>
+        /// Một điểm gọi duy nhất cho lớp hoạt ảnh. Tiến độ pha lấy từ sequencer chứ không đếm
+        /// bằng bộ đếm riêng: bộ đếm riêng là thứ trôi lệch khỏi pha thật sau mỗi lần ai đó
+        /// chỉnh KickPhaseDurations, mà không có gì báo.
+        /// </summary>
+        private void TickKicker(float dt)
+        {
+            if (kicker == null) return;
+            float duration = math.max(0.01f, _durations.For(_seq.Phase));
+            kicker.Tick(dt, math.saturate(_seq.PhaseElapsed / duration));
         }
 
         private void TickFlight(float dt)
@@ -391,7 +413,7 @@ namespace Eleven.UI
         private void TickAfterShot(float dt)
         {
             goalkeeper?.TickDive(dt);
-            kicker?.TickFollowThrough(dt);
+            TickKicker(dt);
 
             if (_driver != null && _driver.IsLive)
             {
@@ -648,6 +670,9 @@ namespace Eleven.UI
             _driver.Launch(in launchState);
 
             _seq.SetIntent(in intent);
+
+            // Lớp hoạt ảnh NHẬN kiểu sút, không bao giờ tự quyết (định luật Phase 7).
+            kicker?.PrepareFor(intent.type);
             if (swipeReceiver != null) swipeReceiver.IsInputEnabled = false;
             if (!IsPlayerTurn) audioDirector?.PlayKick(math.saturate((intent.speed - 18f) / 18f));
             _hasPendingAiIntent = false;
@@ -785,10 +810,17 @@ namespace Eleven.UI
 
             _lastResult = scored ? KickResult.Scored : KickResult.Missed;
             _seq.ReportOutcome(_lastResult);
+
+            // Người sút chỉ được biết kết quả ở đây — không tự suy từ ý đồ sút của chính mình.
+            kicker?.SetOutcome(_lastResult);
         }
 
         private void HandlePhaseChanged(KickPhase oldPhase, KickPhase newPhase)
         {
+            // Báo cho lớp hoạt ảnh TRƯỚC các handler bên dưới: OnEnterRunUp chốt ý đồ sút,
+            // mà clip sút phải được chọn xong trước khi pha RunUp chạy khung đầu tiên.
+            kicker?.OnPhaseChanged(oldPhase, newPhase);
+
             switch (newPhase)
             {
                 case KickPhase.Placing: OnEnterPlacing(); break;
@@ -856,6 +888,10 @@ namespace Eleven.UI
                 _pendingAiIntent = BuildAiIntent(NextKickSeed());
                 _hasPendingAiIntent = true;
                 ApplyAimLean(_pendingAiIntent.aimPoint);
+
+                // Máy biết kiểu sút từ đây, nên nó được đúng clip. Người chơi thì không —
+                // cử chỉ chỉ ngã ngũ lúc nhả tay. Xem KickerClipSelector.PrepareFor.
+                kicker?.PrepareFor(_pendingAiIntent.type);
             }
 
             audioDirector?.SetCrowdTension(0.70f);

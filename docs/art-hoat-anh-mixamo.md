@@ -21,14 +21,43 @@ menu **Eleven ▸ Art ▸ Report Mixamo Clips**.
 
 | File | Giây | Khung | Dịch chuyển | Dự kiến dùng cho |
 |---|---|---|---|---|
-| `PenaltyKick.fbx` | 1.50 | 90 | 2.61 m | `StrikeInstep` — clip trung tâm của cả phase |
-| `KickSoccerball_A.fbx` | 0.57 | 34 | 0.00 m | `StrikeInsideFoot` — sút tại chỗ, không có đà |
-| `KickSoccerball_B.fbx` | 0.50 | 30 | 0.00 m | `StrikeChip` hoặc `StrikeKnuckle` — sút tại chỗ |
-| `StrikeForwardJog.fbx` | 1.30 | 78 | 2.94 m | `StrikeKnuckle` — sút khi đang chạy |
+| `PenaltyKick.fbx` | 1.50 | 90 | 2.61 m | `StrikeInstep` **và** `StrikeKnuckle` — xem cảnh báo dưới |
+| `KickSoccerball_B.fbx` | 0.50 | 30 | 0.00 m | `StrikeInsideFoot` — sút tại chỗ, chân **phải** |
+| `KickSoccerball_A.fbx` | 0.57 | 34 | 0.00 m | `StrikeChip` — sút tại chỗ, chân **trái**, phải bật mirror |
+| `StrikeForwardJog.fbx` | 1.30 | 78 | 2.94 m | ❌ **KHÔNG PHẢI CLIP SÚT** — xem dưới |
 | `JogForward.fbx` | 0.82 | 49 | 2.01 m | `RunUp` — clip lặp |
 | `OffensiveIdle.fbx` | 10.55 | 633 | 0.00 m | `Idle` |
 | `Celebrate.fbx` | 8.53 | 512 | 0.00 m | `Celebrate` — Mixamo *Victory* |
 | `Dejected.fbx` | 4.80 | 288 | 0.00 m | `Dejected` — Mixamo *Rejected* |
+
+> **`StrikeForwardJog` không có cú đá nào.** Phân loại ban đầu dựa vào tên file là sai.
+> Dựng hình clip ở các mốc 0.25 / 0.36 / 0.47 / 0.58 / 0.69 / 0.80 / 0.90 / 1.00 cho thấy
+> nhân vật chạy rồi giảm tốc đứng lại — bàn chân không bao giờ hạ xuống gặp bóng. Cả gói
+> `Soccer Game Pack` (54 fbx) chỉ có **ba** cú sút bóng-trên-đất thật:
+> `soccer penalty kick`, `kick soccerball`, `kick soccerball (2)` — đã import đủ cả ba.
+>
+> Hệ quả: `StrikeKnuckle` **chưa có clip riêng**, đang dùng tạm `PenaltyKick`. Đây là nợ
+> tài sản nghệ thuật, không phải nợ mã — thay clip trong
+> `KickerAnimatorControllerBuilder.cs` rồi chạy lại `Eleven ▸ Art ▸ Probe Strike Contact`
+> và cập nhật hai hằng `KnuckleLength`/`KnuckleContact` ở đầu `MecanimKickerAnimator.cs`.
+
+#### Khung chạm bóng — đo, không đoán
+
+`Eleven ▸ Art ▸ Probe Strike Contact` → `docs/data/strike-contact.tsv`. Khung chạm là khung
+mà bàn chân sút đạt tốc độ đỉnh **trong số** những khung có mắt cá dưới 25 cm, tức lúc chân
+thật sự gặp quả bóng đặt trên đất chứ không phải lúc vung chân cao nhất.
+
+| Clip | Giây | Chân sút | Tốc độ đỉnh | `contact_norm` | Mắt cá lúc chạm | Chân trụ lúc chạm |
+|---|---|---|---|---|---|---|
+| `PenaltyKick` | 1.500 | phải | 11.17 m/s | **0.4889** | 14.4 cm | 0.09 m/s |
+| `KickSoccerball_B` | 0.500 | phải | 6.50 m/s | **0.8333** | 15.5 cm | 0.00 m/s |
+| `KickSoccerball_A` | 0.567 | **trái** | 7.85 m/s | **0.9118** | 13.6 cm | 0.00 m/s |
+| `StrikeForwardJog` | 1.300 | — | — | — | 22.7 cm | — | *(số vô nghĩa: clip không sút)* |
+
+Vì khung chạm nằm **giữa** clip, clip sút phải khởi động **trong pha RunUp**, sớm đúng
+`contact_norm × độ dài` giây trước lúc gameplay bắn bóng. Với `PenaltyKick` là 0.733 s —
+gần trọn pha RunUp (0.90 s). Chờ tới pha Contact mới bật clip thì bóng bay trước, chân vung
+sau 0.733 s. Xem `KickerClipSelector.Resolve`.
 
 ### Thủ môn — `Keeper/`
 
