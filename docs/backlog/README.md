@@ -1,13 +1,58 @@
-# Eleven Metres — Backlog kỹ thuật v1
+# Eleven Metres — Backlog kỹ thuật v2
 
-34 đầu việc code được, mỗi việc có hợp đồng API cố định và checklist nghiệm thu
+58 đầu việc code được, mỗi việc có hợp đồng API cố định và checklist nghiệm thu
 kiểm chứng được bởi người không viết nó. Thiết kế để giao cho agent AI làm từng việc một.
 
 **Dự án:** game sút luân lưu mobile (iOS + Android) · Unity `6000.3` LTS · URP Forward+
-**Ngày:** 24/08/2026 · **Kế hoạch tổng thể:** [../plan.md](../plan.md)
+**Ngày:** 24/08/2026 · **v2 27/08/2026** — thêm Phase 7–10 (T35–T58) sau khi bản demo bóng xám
+chạy được trên máy thật · **Kế hoạch tổng thể:** [../plan.md](../plan.md)
 
 > **Bắt đầu ở đâu:** [Quy tắc giao việc](#quy-tắc-giao-việc) → [Phase 0](phase-0-nen-tang.md) → T01.
 > Mỗi task là một phiên làm việc riêng. Đừng gộp.
+
+---
+
+## Trạng thái 27/08/2026
+
+**Phase 0–6 (T01–T34) đã code xong.** 534 test EditMode, 533 xanh, 0 đỏ, 1 skip có chủ đích.
+Có một **bản demo bóng xám chơi được** đã build và cài lên Pixel 7 thật (`com.eleven.metres`):
+vuốt để sút, thủ môn đọc vị và bay người, luật luân lưu 5 lượt + lượt chết, replay chậm 0.35×,
+lưới Verlet, cỏ instanced, khán giả impostor, âm thanh tổng hợp bằng code.
+Hướng dẫn chơi và bảng đối chiếu 7 phase: [../demo-choi-thu.md](../demo-choi-thu.md).
+
+### Hai lỗi mà 534 test không bắt được
+
+Đáng ghi lại vì nó xác nhận đúng câu cảnh báo ở cuối tài liệu này — *checklist bắt được lỗi
+kỹ thuật, không bắt được lỗi tích hợp*. Cả hai đều là **lỗi ghép tầng**, và cả hai lớp liên
+quan đều xanh test khi đứng riêng:
+
+1. `SimpleKeeperController` (T19) so hạn cam kết với `timeToContact`, tức ngầm đòi thủ môn có
+   mặt ở góc ngay lúc chân chạm bóng — trong khi nó còn cả quãng bóng bay ~0.45s. Với bậc
+   Thường và ô góc, hạn là 0.24 + 0.60 = 0.84s, **dài hơn cả pha chạy đà**.
+2. `BayesianKeeperBrain` (T18) trả `confidence` theo entropy trên 9 ô (đo thật: 0.03–0.10),
+   còn T19 đặt ngưỡng theo thang xác suất (0.20 / 0.45). Hai thang không gặp nhau.
+
+Hậu quả cộng dồn: thủ môn bị ép đứng giữa **843/843 quả**. Sau khi sửa: **28/843**, cản phá
+21.4% ở bậc Khó. Bài học đã được đóng thành test thường trực trong `KeeperReadsShotTests` và
+`MatchSceneIntegrationTests` — hai bộ test đo **tín hiệu thật mà vòng lặp trận bơm vào**,
+chứ không đo từng lớp riêng.
+
+### Nợ đã đo, và chỗ trả nợ
+
+| Nợ | Số đo | Trả ở |
+|---|---|---|
+| `SkinSssLut` chưa gắn vào nhân vật nào | LUT 128×32 đã sinh, chưa có mesh người | [T40](phase-7-hoat-anh-ik.md) |
+| `PostProcessTierConfig` chưa nối vào URP Volume | — | [T50](phase-9-am-thanh-cam-giac.md) |
+| `ScoreboardUI` dùng IMGUI, cấp phát GC mỗi khung | 240/240 khung có cấp phát (đo trên Pixel 7) | [T54](phase-10-toi-uu-phat-hanh.md) |
+| Cỏ và khán giả vẽ mà gần như không thấy | 13.901 lá + 1.244 người mỗi khung | [T55](phase-10-toi-uu-phat-hanh.md) |
+| `SoakTestRunner` chưa có phím tắt | — | [T56](phase-10-toi-uu-phat-hanh.md) |
+| Gói Sentis/AI làm build chậm và phình APK | phần lớn 8 phút build là biên dịch compute shader | [T53](phase-10-toi-uu-phat-hanh.md) |
+| Chưa có menu, chưa có đường ra khỏi trận | — | [T41](phase-8-vong-lap-game.md) |
+| Mục tiêu cản phá T25 (18/28/38%) mâu thuẫn với `ReachEnvelope` | đo được 1.9 / 9.7 / 14.5%; ngân sách bậc Thường 0.32s < 0.46–0.60s mà ô biên đòi | **quyết định thiết kế còn treo**, ghi trong `DifficultyTests` |
+
+Dòng cuối bảng không phải việc tinh chỉnh tham số. Hoặc hạ mục tiêu xuống dải mà tầm với cho
+phép, hoặc chấp nhận rằng cú sút đặt đúng góc là không thể cản — đúng như penalty thật.
+Quyết định đó là của bạn, không giao được.
 
 ---
 
@@ -22,12 +67,20 @@ kiểm chứng được bởi người không viết nó. Thiết kế để gia
 | **[Phase 4: Luật và trận đấu](phase-4-tran-dau.md)** | `T22–T25` | tuần 11–12 | ~4 ngày | T22/T24/T25 song song |
 | **[Phase 5: Trình diễn](phase-5-trinh-dien.md)** | `T26–T32` | tuần 15–21 | ~16 ngày | Hầu hết song song được |
 | **[Phase 6: Kiểm chứng tự động](phase-6-kiem-chung.md)** | `T33–T34` | tuần 30–32 | ~3 ngày | Tuần tự |
+| **[Phase 7: Hoạt ảnh và IK](phase-7-hoat-anh-ik.md)** | `T35–T40` | tuần 11–14 | ~14 ngày | T36/T38 song song; T40 độc lập |
+| **[Phase 8: Vòng lặp game và chế độ chơi](phase-8-vong-lap-game.md)** | `T41–T46` | tuần 23–26 | ~14 ngày | T41 trước, rồi T42/T44/T46 song song |
+| **[Phase 9: Âm thanh và cảm giác](phase-9-am-thanh-cam-giac.md)** | `T47–T51` | tuần 27–29 | ~10 ngày | T47 trước, rồi phần lớn song song |
+| **[Phase 10: Tối ưu, đánh bóng và phát hành](phase-10-toi-uu-phat-hanh.md)** | `T52–T58` | tuần 30–36 | ~13 ngày | Hầu hết song song được |
 
-**Tổng 34 task · 198 mục nghiệm thu · ~47 ngày công code.**
+Lịch tuần bám theo mốc M0–M8 ở [plan.md](../plan.md) mục 08, nên số tuần **chồng nhau giữa vài
+phase** — Phase 7 (M3) và Phase 4 (M2) cùng nằm ở tuần 11–14. Đó là chủ ý của lộ trình, không
+phải lỗi đánh máy: những phase chồng nhau là những phase xen kẽ ngày code và ngày art.
+
+**Tổng 58 task · 343 mục nghiệm thu · ~98 ngày công code.**
 Con số này chỉ tính phần agent làm được — xem [phần dưới](#những-việc-không-giao-cho-ai-được).
 
 <details>
-<summary><strong>Danh sách đầy đủ 34 task</strong> (ᴰ = phải tất định theo seed)</summary>
+<summary><strong>Danh sách đầy đủ 58 task</strong> (ᴰ = phải tất định theo seed)</summary>
 
 **[Phase 0 — Nền tảng](phase-0-nen-tang.md)**
 
@@ -83,6 +136,42 @@ Con số này chỉ tính phần agent làm được — xem [phần dưới](#n
 
 - `T33` [Bộ đo hiệu năng hồi quy](phase-6-kiem-chung.md#t33-bộ-đo-hiệu-năng-hồi-quy)
 - `T34` [Test ngâm và kiểm nhiệt](phase-6-kiem-chung.md#t34-test-ngâm-và-kiểm-nhiệt)
+
+**[Phase 7 — Hoạt ảnh và IK](phase-7-hoat-anh-ik.md)**
+
+- `T35` [Máy trạng thái hoạt ảnh người sút](phase-7-hoat-anh-ik.md)
+- `T36` [IK chân sút gặp bóng](phase-7-hoat-anh-ik.md)
+- `T37` [Đặt chân trụ và hiệu chuẩn lại tín hiệu đọc vị](phase-7-hoat-anh-ik.md) ᴰ
+- `T38` [Hoạt ảnh và IK thủ môn](phase-7-hoat-anh-ik.md)
+- `T39` [Bộ đo chất lượng hoạt ảnh](phase-7-hoat-anh-ik.md)
+- `T40` [Gắn shader da tán xạ vào nhân vật thật](phase-7-hoat-anh-ik.md)
+
+**[Phase 8 — Vòng lặp game và chế độ chơi](phase-8-vong-lap-game.md)**
+
+- `T41` [Máy trạng thái ứng dụng và luồng màn hình](phase-8-vong-lap-game.md)
+- `T42` [Chế độ Arcade: chuỗi trận và tiến trình](phase-8-vong-lap-game.md) ᴰ
+- `T43` [Chế độ người chơi làm thủ môn](phase-8-vong-lap-game.md)
+- `T44` [Cài đặt và hồ sơ người chơi](phase-8-vong-lap-game.md)
+- `T45` [Thống kê cú sút và trí nhớ dài hạn của thủ môn](phase-8-vong-lap-game.md) ᴰ
+- `T46` [Vòng đời ứng dụng trên máy thật](phase-8-vong-lap-game.md)
+
+**[Phase 9 — Âm thanh và cảm giác](phase-9-am-thanh-cam-giac.md)**
+
+- `T47` [Kiến trúc AudioMixer theo lớp và bậc thiết bị](phase-9-am-thanh-cam-giac.md)
+- `T48` [Đám đông phản ứng theo kịch tính trận đấu](phase-9-am-thanh-cam-giac.md)
+- `T49` [Rung (haptics) tách biệt theo sự kiện](phase-9-am-thanh-cam-giac.md)
+- `T50` [Cảm giác va chạm: hit-stop, rung máy và hậu kỳ nhấn nhịp](phase-9-am-thanh-cam-giac.md)
+- `T51` [Bộ đo nghiệm thu M6](phase-9-am-thanh-cam-giac.md)
+
+**[Phase 10 — Tối ưu, đánh bóng và phát hành](phase-10-toi-uu-phat-hanh.md)**
+
+- `T52` [Ngân sách bộ nhớ texture theo bậc và cổng build tự động](phase-10-toi-uu-phat-hanh.md)
+- `T53` [Gỡ gói không dùng và danh sách shader variant được phép](phase-10-toi-uu-phat-hanh.md)
+- `T54` [Thay ScoreboardUI từ IMGUI sang UGUI](phase-10-toi-uu-phat-hanh.md)
+- `T55` [Mật độ và kích thước cỏ, khán giả](phase-10-toi-uu-phat-hanh.md)
+- `T56` [Cổng ổn định nhiệt và pin](phase-10-toi-uu-phat-hanh.md)
+- `T57` [Chuẩn bị phát hành: định danh, ký, quyền và tuân thủ cửa hàng](phase-10-toi-uu-phat-hanh.md)
+- `T58` [Báo cáo lỗi sau phát hành và ranh giới thu thập dữ liệu](phase-10-toi-uu-phat-hanh.md)
 
 </details>
 
@@ -198,8 +287,12 @@ của bạn, ghi CẦN NGƯỜI KIỂM và nói rõ cần làm gì.
 | 4 · Trận đấu | T22–T25 | ~4 ngày | T22/T24/T25 song song |
 | 5 · Trình diễn | T26–T32 | ~16 ngày | Hầu hết song song được |
 | 6 · Kiểm chứng | T33–T34 | ~3 ngày | Tuần tự |
+| 7 · Hoạt ảnh và IK | T35–T40 | ~14 ngày | T36/T38 song song; T40 độc lập |
+| 8 · Vòng lặp game | T41–T46 | ~14 ngày | T41 trước, rồi T42/T44/T46 song song |
+| 9 · Âm thanh và cảm giác | T47–T51 | ~10 ngày | T47 trước, rồi phần lớn song song |
+| 10 · Tối ưu và phát hành | T52–T58 | ~13 ngày | Hầu hết song song được |
 
-**Tổng ~47 ngày công code.** Con số này chỉ tính phần agent làm được. Nó *không* bao gồm:
+**Tổng ~98 ngày công code.** Con số này chỉ tính phần agent làm được. Nó *không* bao gồm:
 dựng model, làm sạch mocap, chỉnh ánh sáng, tinh chỉnh cảm giác, thiết kế âm thanh,
 và toàn bộ vòng lặp thẩm mỹ của M4 — vốn là phần chiếm nhiều thời gian nhất trong 36 tuần của plan.
 

@@ -1,4 +1,4 @@
-← [Phase 5: Trình diễn](phase-5-trinh-dien.md) · [Mục lục](README.md)
+← [Phase 5: Trình diễn](phase-5-trinh-dien.md) · [Mục lục](README.md) · [Phase 7: Hoạt ảnh và IK](phase-7-hoat-anh-ik.md) →
 
 ---
 
@@ -47,5 +47,5 @@ Tiêu chí nghiệm thu chính thức của M7. Không phải chuyện lo sau.
 
 ---
 
-[Mục lục](README.md) · [Phase 5: Trình diễn](phase-5-trinh-dien.md)
+[Mục lục](README.md) · [Phase 5: Trình diễn](phase-5-trinh-dien.md) · [Phase 7: Hoạt ảnh và IK](phase-7-hoat-anh-ik.md)
 
