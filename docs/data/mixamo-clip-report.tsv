@@ -1,0 +1,38 @@
+# Avatar source: Assets/_Project/Art/Characters/XBot.fbx
+file	clip	seconds	fps	frames	human	rootCurves	loop	speed_m_s	displacement_m	avatar
+KeeperBodyBlock_A.fbx	KeeperBodyBlock_A	2.633	60	158	True	True	False	0.221	0.582	copied
+KeeperBodyBlock_B.fbx	KeeperBodyBlock_B	2.450	60	147	True	True	False	0.222	0.544	copied
+KeeperBodyBlock_C.fbx	KeeperBodyBlock_C	3.417	60	205	True	True	False	0.235	0.804	copied
+KeeperCatch_A.fbx	KeeperCatch_A	2.083	60	125	True	True	False	0.494	1.029	copied
+KeeperCatch_B.fbx	KeeperCatch_B	1.250	60	75	True	True	False	0.445	0.557	copied
+KeeperCatch_D.fbx	KeeperCatch_D	2.733	60	164	True	True	False	0.151	0.413	copied
+KeeperCelebrate.fbx	KeeperCelebrate	6.183	60	371	True	True	False	0.179	1.105	copied
+KeeperDivingSave_A.fbx	KeeperDivingSave_A	3.400	60	204	True	True	False	0.753	2.559	copied
+KeeperDivingSave_B.fbx	KeeperDivingSave_B	3.233	60	194	True	True	False	0.867	2.802	copied
+KeeperIdle_A.fbx	KeeperIdle_A	4.617	60	277	True	True	True	0.000	0.000	copied
+KeeperIdle_B.fbx	KeeperIdle_B	3.333	60	200	True	True	True	0.000	0.000	copied
+KeeperMiss.fbx	KeeperMiss	2.933	60	176	True	True	False	0.157	0.460	copied
+KeeperSidestep_A.fbx	KeeperSidestep_A	0.517	60	31	True	True	False	2.313	1.195	copied
+KeeperSidestep_B.fbx	KeeperSidestep_B	0.500	60	30	True	True	False	2.982	1.491	copied
+Celebrate.fbx	Celebrate	8.533	60	512	True	True	False	0.000	0.000	copied
+Dejected.fbx	Dejected	4.800	60	288	True	True	False	0.000	0.000	copied
+JogForward.fbx	JogForward	0.817	60	49	True	True	True	2.416	1.973	copied
+KickSoccerball_A.fbx	KickSoccerball_A	0.567	60	34	True	True	False	0.000	0.000	copied
+KickSoccerball_B.fbx	KickSoccerball_B	0.500	60	30	True	True	False	0.000	0.000	copied
+OffensiveIdle.fbx	OffensiveIdle	10.550	60	633	True	True	True	0.000	0.000	copied
+PenaltyKick.fbx	PenaltyKick	1.500	60	90	True	True	False	1.690	2.535	copied
+StrikeForwardJog.fbx	StrikeForwardJog	1.300	60	78	True	True	False	2.219	2.884	copied
+
+# Skeleton (XBot.fbx): 68 transform
+# Skin	2 SkinnedMeshRenderer, 28374 đỉnh — có mesh
+# Hips	mixamorig:Hips
+# LeftFoot	mixamorig:LeftFoot
+# RightFoot	mixamorig:RightFoot
+# LeftToes	mixamorig:LeftToeBase
+# RightToes	mixamorig:RightToeBase
+# LeftHand	mixamorig:LeftHand
+# RightHand	mixamorig:RightHand
+# Head	mixamorig:Head
+# Spine	mixamorig:Spine
+# Pose	tay chuc 0.0° so voi phuong ngang → T-pose
+
