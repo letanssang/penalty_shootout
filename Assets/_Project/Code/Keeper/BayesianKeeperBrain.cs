@@ -213,21 +213,21 @@ namespace Eleven.Keeper
                 }
             }
 
-            // Confidence = 1 - (entropy / max_entropy)
-            // Max entropy = log(9) ≈ 2.197
-            // Khi phân phối đều → entropy = max → confidence = 0
-            // Khi phân phối hoàn toàn tập trung → entropy = 0 → confidence = 1
-            float entropy = 0f;
-            for (int c = 0; c < 9; c++)
-            {
-                if (posterior[c] > 1e-10f)
-                    entropy -= posterior[c] * math.log(posterior[c]);
-            }
-            float maxEntropy = math.log(9f);
-            float confidence = math.saturate(1f - entropy / maxEntropy);
-
-            // Observability bằng 0 → ép confidence = 0 (không biết gì)
-            confidence *= obs;
+            // Confidence = xác suất của ô tốt nhất, quy về thang [0, 1] với 0 = phân phối đều.
+            //
+            // BẢN ĐẦU DÙNG ENTROPY và đó là một lỗi GHÉP TẦNG, không phải lỗi của T18:
+            // 1 - entropy/log(9) trên 9 ô luôn ra số rất nhỏ với mọi phân phối thực tế
+            // (đo được 0.03–0.10 ở bậc Thường), rồi còn nhân thêm observability. Trong khi
+            // T19 (SimpleKeeperController) đặt ngưỡng theo thang XÁC SUẤT: 0.45 là "đủ chắc",
+            // dưới 0.20 là "mù". Hai thang không gặp nhau, nên nhánh "confidence < 0.20 và
+            // hết giờ → đứng giữa" ăn 100% số lượt: thủ môn không bao giờ bay người.
+            // Cả hai lớp đều xanh test khi đứng riêng — chỉ khi đo bằng
+            // KeeperReadsShotTests (dựng lại đúng tín hiệu mà trận đấu bơm vào) mới lộ ra.
+            //
+            // Thang mới khớp đúng ngữ nghĩa T19 mong đợi và vẫn giữ mọi bất biến cũ:
+            // observability = 0 → posterior đều tuyệt đối → maxProb = 1/9 → confidence = 0.
+            // Không cần nhân obs lần nữa: obs đã nằm trong posterior ở bước 6.
+            float confidence = math.saturate((maxProb - uniformVal) / (1f - uniformVal));
 
             return new KeeperRead
             {

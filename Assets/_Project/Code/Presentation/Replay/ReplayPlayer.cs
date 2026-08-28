@@ -39,6 +39,27 @@ namespace Eleven.Presentation
             Reset();
         }
 
+        /// <summary>
+        /// Nạp lượt sút KÈM vận tốc phóng thật đã dùng lúc chơi.
+        ///
+        /// Vì sao cần: <see cref="Reset"/> dựng lại vận tốc bằng cách chuẩn hoá hướng
+        /// (aimPoint - gốc) rồi nhân tốc độ — đúng về mặt tất định nhưng KHÔNG phải vận tốc
+        /// thật, vì lúc chơi vận tốc còn được bù trừ lực cản và Magnus để bóng đi qua đúng
+        /// điểm ngắm. Phát lại bằng vận tốc chuẩn hoá sẽ cho một quỹ đạo khác với quỹ đạo
+        /// người chơi vừa nhìn thấy. Đây là thành viên THÊM, không đổi hành vi của Load cũ.
+        /// </summary>
+        public void LoadWithLaunch(in ReplayKickData data, float3 launchVelocity, BallParams? customParams = null)
+        {
+            Load(in data, customParams);
+
+            CurrentBallState = new BallState
+            {
+                position = new float3(0f, _ballParams.radius, 0f),
+                velocity = launchVelocity,
+                spin = data.intent.spin
+            };
+        }
+
         public void SetPlaybackSpeed(float speed)
         {
             PlaybackSpeed = math.clamp(speed, 0.1f, 4.0f);

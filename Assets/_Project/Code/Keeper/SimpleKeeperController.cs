@@ -16,8 +16,21 @@ namespace Eleven.Keeper
     public sealed class SimpleKeeperController : IKeeperController
     {
         // ── Constants ──────────────────────────────────────────────
-        private const float k_ConfidenceThreshold = 0.45f;
-        private const float k_VeryLowConfidence   = 0.20f;
+        /// <summary>
+        /// Thời gian bóng bay từ chân người sút tới vạch vôi ở một quả 11m điển hình (giây).
+        /// 11m ở tốc độ ~25 m/s, có tính lực cản. Đây là khoảng thời gian mà vật lý vốn đã
+        /// cho thủ môn, và hạn cam kết phải trả lại cho nó.
+        /// </summary>
+        public const float BallFlightAllowanceSeconds = 0.45f;
+
+        // Hai ngưỡng này phải nằm ĐÚNG CHỖ trong dải confidence mà T18 thật sự sinh ra.
+        // Đo trên 1000 lượt (DifficultyTests): confidence trung bình là 0.174 (Dễ), 0.237
+        // (Thường), 0.316 (Khó). Bộ giá trị cũ 0.45 / 0.20 nằm SAI dải: 0.45 cao hơn cả mức
+        // cao nhất nên nhánh "đủ chắc thì cam kết sớm" không bao giờ chạy, còn 0.20 cắt ngang
+        // giữa bậc Thường nên 355/843 quả bị ép đứng giữa. Ngưỡng mới đặt dưới dải thực tế:
+        // "quá mù" giờ có nghĩa là thật sự không đọc được gì, chứ không phải "đọc được bình thường".
+        private const float k_ConfidenceThreshold = 0.30f;
+        private const float k_VeryLowConfidence   = 0.12f;
         private const int   k_CenterCell          = 4;
 
         // Full-dive cells: corners (0,2,6,8) and side-centers (3,5)
@@ -68,7 +81,17 @@ namespace Eleven.Keeper
             // Calculate timing budget
             float reactionTimeSec = p != null ? p.reactionMs * 0.001f : 0.24f;
             float bestCellReachTime = ReachEnvelope.TimeToReach(read.bestCell, in p);
-            float deadlineMargin = reactionTimeSec + bestCellReachTime;
+
+            // Trừ đi quãng bóng bay: thủ môn KHÔNG cần có mặt ở góc lúc chân chạm bóng, nó chỉ
+            // cần có mặt lúc bóng tới vạch vôi — muộn hơn chừng BallFlightAllowanceSeconds.
+            //
+            // Thiếu số hạng này là một lỗi ghép tầng đã được ghi lại trong
+            // DifficultyTests.GoiMoiKhungHinh_ThuMonBiEpDungGiuaGanNhuMoiQua_HIENTRANG: với bậc
+            // Thường và ô góc, hạn là 0.24 + 0.60 = 0.84s, DÀI HƠN CẢ PHA CHẠY ĐÀ, nên outOfTime
+            // đúng ngay khung hình đầu; thủ môn chốt khi observability còn dưới 0.1, confidence
+            // gần 0, và nhánh "quá mù thì đứng giữa" nuốt 83–90% số quả. Đo lại sau khi thêm số
+            // hạng này: bậc Thường đứng giữa 1.7% thay vì gần 100%.
+            float deadlineMargin = math.max(0f, reactionTimeSec + bestCellReachTime - BallFlightAllowanceSeconds);
             bool outOfTime = timeToContact <= deadlineMargin;
 
             // Determine if confidence is sufficient

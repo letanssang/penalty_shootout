@@ -15,6 +15,12 @@ namespace Eleven.Ball
     /// bằng cách nào — Launch chỉ nhận BallState. Thêm property Parameters (mặc định
     /// BallParams.Default) làm nơi cấu hình khí động cho instance này. Đây là thành viên MỚI,
     /// không đổi chữ ký của bất kỳ thành viên nào trong hợp đồng gốc.
+    ///
+    /// BỔ SUNG CHO BẢN CHƠI ĐƯỢC (cũng chỉ THÊM, không sửa chữ ký cũ):
+    /// <see cref="ExternalAcceleration"/>, <see cref="FlightTime"/> và <see cref="Override"/>.
+    /// Lý do: va chạm cột dọc, tay thủ môn và bất ổn định knuckle đều phải tác động vào bóng
+    /// Ở TẦN SỐ SOLVER (120Hz) chứ không phải tần số khung hình — nếu không, cùng một cú sút
+    /// sẽ ra kết quả khác nhau giữa máy 60fps và máy 30fps.
     /// </summary>
     public class BallDriver : MonoBehaviour
     {
@@ -29,6 +35,19 @@ namespace Eleven.Ball
         public BallState State => currentState;
         public bool IsLive { get; private set; }
 
+        /// <summary>
+        /// Gia tốc phụ (m/s²) do GAMEPLAY áp thêm ngoài mô hình khí động — hiện chỉ dùng cho
+        /// bất ổn định knuckle (T15). Cố ý để ngoài <see cref="BallSolver"/>: đây không phải
+        /// vật lý, và trộn vào solver sẽ làm hỏng tính thuần của nó.
+        /// </summary>
+        public float3 ExternalAcceleration { get; set; }
+
+        /// <summary>Thời gian bay tích luỹ theo ĐỒNG HỒ SOLVER, tính từ lần Launch gần nhất.</summary>
+        public float FlightTime { get; private set; }
+
+        /// <summary>Trạng thái ngay TRƯỚC bước solver gần nhất — dùng để dò giao cắt trong bước.</summary>
+        public BallState PreviousState => previousState;
+
         public event Action<BallState> OnSimStep;
 
         BallState currentState;
@@ -40,6 +59,8 @@ namespace Eleven.Ball
             currentState = initial;
             previousState = initial;
             accumulator = 0f;
+            FlightTime = 0f;
+            ExternalAcceleration = float3.zero;
             IsLive = true;
         }
 
@@ -53,8 +74,21 @@ namespace Eleven.Ball
             currentState = new BallState(position, float3.zero, float3.zero);
             previousState = currentState;
             accumulator = 0f;
+            FlightTime = 0f;
+            ExternalAcceleration = float3.zero;
             IsLive = false;
             transform.position = position;
+        }
+
+        /// <summary>
+        /// Ghi đè trạng thái bóng giữa chừng (bật cột, chạm tay thủ môn) mà KHÔNG chạm vào
+        /// đồng hồ solver. Dùng Launch cho việc này sẽ xoá luôn thời gian bay và bộ tích luỹ,
+        /// khiến mọi mốc thời gian sau va chạm bị lệch.
+        /// </summary>
+        public void Override(in BallState s)
+        {
+            currentState = s;
+            previousState = s;
         }
 
         void Update()
@@ -69,7 +103,18 @@ namespace Eleven.Ball
             {
                 previousState = currentState;
                 currentState = BallSolver.Step(currentState, parameters, SimDt);
+
+                // Gia tốc gameplay áp SAU solver: solver vẫn là nguồn sự thật duy nhất về
+                // khí động, phần cộng thêm nhìn thấy rõ ràng là phần cộng thêm.
+                float3 extra = ExternalAcceleration;
+                if (math.lengthsq(extra) > 0f)
+                {
+                    currentState.velocity += extra * SimDt;
+                    currentState.position += 0.5f * extra * SimDt * SimDt;
+                }
+
                 accumulator -= SimDt;
+                FlightTime += SimDt;
                 steps++;
                 OnSimStep?.Invoke(currentState);
             }

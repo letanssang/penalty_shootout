@@ -320,13 +320,17 @@ namespace Eleven.Tests.EditMode
         }
 
         [Test]
-        [Ignore("T25 mục 3 CHƯA ĐẠT — chặn bởi T21 (phân giải pha cản phá) chưa được xây. " +
-                "Đo được hiện tại (1000 lượt, gọi TryCommit tại commitOffsetMs, luật cản phá tạm " +
-                "là 'đoán trúng đúng ô VÀ kịp tầm với'): xem log của " +
-                "MoPhong1000Luot_TiLeCanPha_TangDanTheoDoKho. Ba nguyên nhân đã đo, ghi trong " +
-                "docs/backlog/phase-4-tran-dau.md mục T25. Bật lại test này sau khi T21 cho luật " +
-                "cản phá thật (giao cắt quỹ đạo bay người với quỹ đạo bóng) rồi mới hiệu chỉnh " +
-                "thông số ba hồ sơ — hiệu chỉnh bây giờ là hiệu chỉnh vào một luật sắp bị thay.")]
+        [Ignore("T25 mục 3 CHƯA ĐẠT — và số đo ngày 2026-08-27 cho thấy mục tiêu này MÂU THUẪN " +
+                "với mô hình tầm với, chứ không phải chỉ cần chỉnh tham số. Sau khi sửa hạn cam kết " +
+                "của T19 và đặt lại hai ngưỡng confidence: cản phá 1.9% / 9.7% / 14.5% so với mục " +
+                "tiêu 18/28/38. Lý do đo được: ngân sách thời gian của bậc Thường là 0.45s bóng bay " +
+                "+ 0.11s cam kết sớm - 0.24s phản xạ = 0.32s, trong khi ReachEnvelope đòi 0.46-0.60s " +
+                "cho các ô biên. Thủ môn chỉ với tới nổi ô 4 (0.22s) và ô 7 (0.15s) — 2/9 ô — nhân " +
+                "với ~40% đọc đúng ô ra đúng 9.7% đã đo. Muốn chạm 28% thì phải nới reach, mà " +
+                "plan.md cấm: 'độ khó chỉ được nằm ở p_read và t_commit, không bao giờ ở reach'. " +
+                "Việc cần làm trước khi bật lại test này là QUYẾT ĐỊNH THIẾT KẾ, không phải tinh " +
+                "chỉnh: hoặc hạ mục tiêu xuống dải mà tầm với cho phép, hoặc chấp nhận rằng cú sút " +
+                "đặt đúng góc là không thể cản — đúng như penalty thật.")]
         public void MoPhong1000Luot_TiLeCanPha_DungBangMucTieu()
         {
             AssertSaveRate(DifficultyLevel.Easy, 0.18f);
@@ -342,35 +346,30 @@ namespace Eleven.Tests.EditMode
         }
 
         /// <summary>
-        /// TEST ĐẶC TẢ HIỆN TRẠNG, không phải test mong muốn.
+        /// Chỗ này TRƯỚC ĐÂY là một test đặc tả hiện trạng, ghim đúng cái lỗi
+        /// "thủ môn bị ép đứng giữa gần như mọi quả" (843/843), kèm dặn dò: khi test đó đỏ
+        /// thì nghĩa là mốc cam kết của T19 đã được sửa, hãy xoá nó đi.
         ///
-        /// SimpleKeeperController tính deadlineMargin = reactionMs + TimeToReach(bestCell).
-        /// Với bậc Thường và ô góc, con số đó là 0.24 + 0.60 = 0.84s — dài hơn cả pha chạy đà
-        /// (runUp trong KickPhaseDurations là 0.90s, phần nhìn thấy được còn ngắn hơn). Nên
-        /// outOfTime đúng gần như ngay lập tức: đo được thủ môn chốt sau 1–3 khung hình,
-        /// lúc đó observability vẫn còn dưới 0.1 và confidence gần 0, và nhánh
-        /// "confidence &lt; 0.20 thì đứng giữa" nuốt trọn 83–90% số quả.
+        /// Lỗi đã sửa ngày 2026-08-27: hạn cam kết trong SimpleKeeperController thiếu
+        /// <see cref="SimpleKeeperController.BallFlightAllowanceSeconds"/> — nó ngầm đòi thủ môn
+        /// phải có mặt ở góc ngay lúc chân chạm bóng, trong khi thực tế nó còn cả quãng bóng bay.
+        /// Cộng thêm hai ngưỡng confidence bị đặt sai dải so với thang mà T18 sinh ra.
+        /// Đo lại sau khi sửa: ép đứng giữa còn 92/843 ở bậc Khó.
         ///
-        /// (Deadline phụ thuộc ô đang nghiêng về — ô giữa với nhanh hơn ô góc — nên số khung
-        /// đọc được thay đổi theo từng quả, chứ không phải luôn chốt ở khung đầu.)
-        ///
-        /// KHI TEST NÀY ĐỎ, đừng nới ngưỡng: nó đỏ nghĩa là mốc cam kết trong T19 đã được sửa.
-        /// Lúc đó xoá test này và bật lại MoPhong1000Luot_TiLeCanPha_DungBangMucTieu.
+        /// Test này ghim chiều ngược lại, để lỗi cũ không bao giờ lặng lẽ quay lại.
         /// </summary>
         [Test]
-        public void GoiMoiKhungHinh_ThuMonBiEpDungGiuaGanNhuMoiQua_HIENTRANG()
+        public void ThuMon_PhaiThucSuBayNguoi_ChuKhongDungGiua()
         {
             var r = PenaltySim.Run(Profile(DifficultyLevel.Hard), 1000, 20260827u, PenaltySim.Timing.PerFrame);
 
-            Assert.Greater(r.centerCommits, (int)(0.9f * r.onTarget),
-                $"Chỉ {r.centerCommits}/{r.onTarget} quả bị ép đứng giữa — mốc cam kết của T19 " +
-                "hình như đã được sửa. Xoá test đặc tả này và bật lại test dải mục tiêu.");
-            // Trung bình thủ môn chốt trong 1/4 đầu của cửa sổ đọc cue — tức gần như chưa
-            // nhìn gì. Deadline phụ thuộc ô đang nghiêng về (ô giữa tới nhanh hơn ô góc) nên
-            // đôi khi nó đọc thêm được một hai khung, chứ không phải luôn chốt ở khung đầu.
-            Assert.Greater(r.meanCommitTtc, 0.75f * 0.60f,
-                $"Thủ môn cam kết khi còn {r.meanCommitTtc:F3}s — đã đọc được kha khá cue " +
-                "trước khi quyết, tức mốc cam kết đã đổi. Xem ghi chú trên.");
+            Debug.Log($"[T19] Bậc Khó: ép đứng giữa {r.centerCommits}/{r.onTarget}, " +
+                      $"cam kết khi còn {r.meanCommitTtc:F3}s, cản phá {r.SaveRate * 100f:F1}%");
+
+            Assert.Less(r.centerCommits, (int)(0.35f * r.onTarget),
+                $"{r.centerCommits}/{r.onTarget} quả bị ép đứng giữa. Một quả 11m không có pha " +
+                "bay người thì không còn là quả 11m. Kiểm tra lại hạn cam kết trong T19 và hai " +
+                "ngưỡng confidence — chúng phải nằm trong dải mà T18 thật sự sinh ra.");
         }
 
         /// <summary>

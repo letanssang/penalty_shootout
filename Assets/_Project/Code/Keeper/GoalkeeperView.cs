@@ -1,132 +1,203 @@
-using System;
-using UnityEngine;
 using Unity.Mathematics;
+using UnityEngine;
 using Eleven.Ball;
-using Eleven.Keeper;
 
 namespace Eleven.Keeper
 {
     /// <summary>
-    /// Component quản lý hiển thị và chuyển động bay người cản phá của Thủ môn trong Scene 3D.
-    /// Tích hợp Bộ não suy luận Bayesian và xử lý va chạm đẩy bóng (Deflection).
+    /// Thân xác của thủ môn trong scene. Lớp này KHÔNG tự nghĩ ra hành vi nào — nó chỉ
+    /// hiển thị kết quả của bộ não (T18), máy trạng thái cam kết (T19), vùng với tới (T16)
+    /// và bộ phân giải cản phá (T21).
+    ///
+    /// Bất biến quan trọng: đường bay người nhìn thấy trên màn hình dùng ĐÚNG công thức
+    /// <see cref="KeeperReach.ReachProgress"/> mà <see cref="SaveResolver"/> dùng để phán
+    /// kết quả. Nếu vẽ bằng một công thức khác, sẽ có những pha mắt thấy tay chạm bóng mà
+    /// máy báo thủng lưới — thứ khiến người chơi gọi game là "ăn gian".
     /// </summary>
     public sealed class GoalkeeperView : MonoBehaviour
     {
-        [Header("Thông số hình thể & Vị trí")]
+        [Header("Vị trí")]
         [SerializeField] private Vector3 homePosition = new Vector3(0f, 0.95f, 11.0f);
-        [SerializeField] private float diveSpeed = 6.5f;
 
-        private Vector3 currentVelocity;
-        private Vector3 targetDivePos;
-        private bool isDiving;
-        private BayesianKeeperBrain brain;
-        private KeeperProfile profile;
-        private ShotHistory history;
-        private bool hasDeflected = false;
+        [Header("Găng tay (tuỳ chọn — chỉ để hiển thị)")]
+        [SerializeField] private Transform leftGlove;
+        [SerializeField] private Transform rightGlove;
 
-        public Vector3 CurrentPosition => transform.position;
-        public bool HasDeflected => hasDeflected;
+        private readonly SimpleKeeperController _controller = new SimpleKeeperController();
+        private readonly BayesianKeeperBrain _brain = new BayesianKeeperBrain();
+        private ShotHistory _history;
+
+        private KeeperProfile _profile;    // hồ sơ độ khó đang chọn (asset, không được sửa)
+        private KeeperProfile _effective;  // bản sao runtime, có commitOffset THẬT của lượt này
+
+        private DiveDecision _decision;
+        private bool _committed;
+        private float _confidence;
+        private int _bestCell = 4;
+
+        private bool _diving;
+        private float _timeSinceContact;
+        private Vector3 _homeGloveL, _homeGloveR;
+
+        public KeeperPhase Phase => _controller.Phase;
+        public DiveDecision Decision => _decision;
+        public bool HasCommitted => _committed;
+        public float Confidence => _confidence;
+        public int PredictedCell => _bestCell;
+
+        /// <summary>Hồ sơ dùng để phân giải — đã gắn thời điểm cam kết thật của lượt hiện tại.</summary>
+        public KeeperProfile EffectiveProfile => _effective != null ? _effective : _profile;
 
         private void Awake()
         {
+            _history = default;
+            if (_profile == null) _profile = KeeperProfile.CreateMedium();
+
+            _effective = ScriptableObject.CreateInstance<KeeperProfile>();
+            CopyProfile(_profile, _effective);
+
+            if (leftGlove != null) _homeGloveL = leftGlove.localPosition;
+            if (rightGlove != null) _homeGloveR = rightGlove.localPosition;
+
             ResetToHome();
-
-            // Khởi tạo Não thủ môn với thông số độ khó chuẩn
-            profile = ScriptableObject.CreateInstance<KeeperProfile>();
-            profile.readAccuracy = 0.55f; // 55% đoán đúng hướng
-            profile.reactionMs = 200f;    // 200ms phản xạ
-            profile.commitOffsetMs = -80f;// Cam kết trước lúc bóng bay
-            profile.memoryWeight = 0.4f;
-
-            brain = new BayesianKeeperBrain();
-            history = new ShotHistory();
         }
+
+        private void OnDestroy()
+        {
+            if (_effective != null) Destroy(_effective);
+        }
+
+        public void SetProfile(KeeperProfile p)
+        {
+            if (p == null) return;
+            _profile = p;
+            if (_effective != null) CopyProfile(_profile, _effective);
+        }
+
+        /// <summary>Xoá trí nhớ thói quen — gọi khi bắt đầu một trận mới, KHÔNG gọi giữa trận.</summary>
+        public void ClearMemory() => _history.Clear();
+
+        /// <summary>Nạp một cú sút vào trí nhớ (T20). Ô nào bị sút nhiều thì lần sau bị đọc vị dễ hơn.</summary>
+        public void RememberShot(int cell) => _history.Record(cell);
 
         public void ResetToHome()
         {
-            isDiving = false;
-            hasDeflected = false;
+            _controller.Reset();
+            _committed = false;
+            _diving = false;
+            _confidence = 0f;
+            _bestCell = 4;
+            _decision = default;
+            _timeSinceContact = 0f;
+
             transform.position = homePosition;
-            transform.rotation = Quaternion.Euler(0f, 180f, 0f); // Nhìn về phía chấm 11m
-            targetDivePos = homePosition;
-            currentVelocity = Vector3.zero;
+            transform.rotation = Quaternion.Euler(0f, 180f, 0f);
+
+            if (leftGlove != null) leftGlove.localPosition = _homeGloveL;
+            if (rightGlove != null) rightGlove.localPosition = _homeGloveR;
+
+            if (_effective != null) CopyProfile(_profile, _effective);
         }
 
         /// <summary>
-        /// Kích hoạt phản xạ bay người cản phá khi người chơi sút bóng.
+        /// Một khung hình ĐỌC VỊ trong lúc người sút chạy đà. Trả về true đúng khung hình
+        /// thủ môn chốt quyết định.
         /// </summary>
-        public void ReactToShot(float3 launchVelocity, float3 spin, uint seed)
+        public bool TickRead(in KeeperCues cues, float timeToContact, uint seed)
         {
-            hasDeflected = false;
+            if (_committed) return false;
 
-            // Trích xuất tín hiệu và suy luận góc đổ người
-            float latOffset = launchVelocity.x > 0 ? 0.18f : -0.18f;
-            float hipYaw = Mathf.Atan2(launchVelocity.x, launchVelocity.z) * Mathf.Rad2Deg;
+            KeeperRead read = _brain.Infer(cues, _history, _profile, seed);
+            _confidence = read.confidence;
+            _bestCell = read.bestCell;
 
-            var cues = new KeeperCues
+            // Hạn cam kết đã tính sẵn quãng bóng bay bên trong SimpleKeeperController.
+            if (_controller.TryCommit(read, timeToContact, _profile, out DiveDecision d))
             {
-                plantFootLateralOffset = latOffset,
-                hipYawDegrees = hipYaw,
-                approachAngleDegrees = hipYaw * 0.8f,
-                runUpLength = 3.5f,
-                timeToContact = 0.05f,
-                observability = 0.9f
-            };
+                _decision = d;
+                _committed = true;
 
-            var read = brain.Infer(cues, history, profile, seed);
-
-            // Dự đoán ô mục tiêu (0..8)
-            int targetCell = read.bestCell;
-            float3 cellCenter = GoalFrame.CellCenter(targetCell);
-
-            // Xác định điểm bay người mục tiêu
-            float diveTargetX = Mathf.Clamp(cellCenter.x * 0.88f, -3.2f, 3.2f);
-            float diveTargetY = Mathf.Clamp(cellCenter.y, 0.4f, 2.2f);
-
-            targetDivePos = new Vector3(diveTargetX, diveTargetY, 11.0f);
-            isDiving = true;
-        }
-
-        /// <summary>
-        /// Kiểm tra và xử lý va chạm đẩy bóng (Parry/Deflect) khi bóng tới gần thủ môn
-        /// </summary>
-        public bool TryDeflectBall(ref float3 ballPos, ref float3 ballVel, float ballRadius = 0.11f)
-        {
-            if (hasDeflected) return false;
-
-            float dist = Vector3.Distance((Vector3)(float3)ballPos, transform.position);
-            if (dist <= 0.85f)
-            {
-                hasDeflected = true;
-                float3 normal = math.normalize(ballPos - (float3)transform.position);
-                if (math.lengthsq(normal) < 0.001f) normal = new float3(0f, 0.5f, -0.866f);
-
-                // Đẩy bóng văng ngược ra ngoài và lệch hướng
-                float speed = math.length(ballVel);
-                ballVel = normal * (speed * 0.65f) + new float3(normal.x * 4f, 3.5f, -6.0f);
+                // Thời điểm cam kết THẬT (âm = trước lúc chạm bóng) ghi đè hồ sơ, để pha do dự
+                // phải trả giá bằng đúng số mili giây đã do dự — cả ở hình ảnh lẫn ở kết quả.
+                if (_effective != null) _effective.commitOffsetMs = -d.commitTime * 1000f;
                 return true;
             }
 
             return false;
         }
 
-        private void Update()
+        /// <summary>Chân đã chạm bóng: bắt đầu đếm giờ bay người.</summary>
+        public void OnContact()
         {
-            if (isDiving)
-            {
-                // Di chuyển mượt mà tới vị trí bay người
-                transform.position = Vector3.SmoothDamp(
-                    transform.position,
-                    targetDivePos,
-                    ref currentVelocity,
-                    0.18f,
-                    diveSpeed
-                );
+            _timeSinceContact = 0f;
+            _diving = true;
 
-                // Nghiêng người theo hướng bay
-                float tiltAngle = (targetDivePos.x - homePosition.x) * -16.0f;
-                transform.rotation = Quaternion.Euler(0f, 180f, tiltAngle);
+            if (!_committed)
+            {
+                // Không kịp đọc vị: đứng giữa. Cam kết ngay lúc chạm bóng.
+                _decision = new DiveDecision { targetCell = 4, commitTime = 0f, isFullDive = false };
+                _committed = true;
+                if (_effective != null) _effective.commitOffsetMs = 0f;
             }
+
+            _controller.StartDive();
+        }
+
+        /// <summary>Bay người. Gọi mỗi khung hình trong pha bóng bay.</summary>
+        public void TickDive(float dt)
+        {
+            if (!_diving) return;
+            _timeSinceContact += dt;
+
+            float prog = KeeperReach.ReachProgress(_decision.targetCell, _timeSinceContact, EffectiveProfile);
+
+            float3 cell = GoalFrame.CellCenter(_decision.targetCell);
+            // Thân người dừng thấp hơn và gần tâm hơn tay: tay mới là thứ chạm bóng.
+            Vector3 target = new Vector3(
+                Mathf.Clamp(cell.x * 0.80f, -2.95f, 2.95f),
+                Mathf.Clamp(cell.y * 0.72f + 0.20f, 0.38f, 1.85f),
+                homePosition.z);
+
+            transform.position = Vector3.Lerp(homePosition, target, prog);
+
+            // Nghiêng người: bay hết tầm thì gần như nằm ngang, đổ người tại chỗ thì chỉ nghiêng nhẹ.
+            float maxTilt = _decision.isFullDive ? 74f : 22f;
+            float side = cell.x >= 0f ? -1f : 1f;
+            transform.rotation = Quaternion.Euler(0f, 180f, maxTilt * prog * side);
+
+            // Găng tay phía đổ người vươn tới đúng tâm ô — đây chính là điểm SaveResolver đo.
+            Transform reaching = cell.x >= 0f ? rightGlove : leftGlove;
+            if (reaching != null)
+            {
+                Vector3 hand = (Vector3)(float3)KeeperReach.HandPositionAt(_decision.targetCell, _timeSinceContact, EffectiveProfile);
+                reaching.position = hand;
+            }
+        }
+
+        /// <summary>
+        /// Phân giải pha cản phá tại đúng khoảnh khắc bóng qua mặt phẳng khung thành (T21).
+        /// </summary>
+        public SaveResult ResolveSave(in BallState atCrossing, float ballArrivalTime, uint seed, out float3 deflectVelocity)
+        {
+            float handDist = KeeperReach.HandDistanceToBall(_decision, atCrossing.position, ballArrivalTime, EffectiveProfile);
+            SaveResult result = SaveResolver.Resolve(atCrossing, _decision, handDist, EffectiveProfile, seed, out deflectVelocity);
+            _controller.Recover();
+            return result;
+        }
+
+        /// <summary>Khoảng cách tay–bóng dự kiến, chỉ để hiển thị debug.</summary>
+        public float HandDistanceTo(float3 crossingPoint, float ballArrivalTime)
+            => KeeperReach.HandDistanceToBall(_decision, crossingPoint, ballArrivalTime, EffectiveProfile);
+
+        private static void CopyProfile(KeeperProfile src, KeeperProfile dst)
+        {
+            if (src == null || dst == null) return;
+            dst.readAccuracy = src.readAccuracy;
+            dst.reactionMs = src.reactionMs;
+            dst.commitOffsetMs = src.commitOffsetMs;
+            dst.reachScale = src.reachScale;
+            dst.parryChance = src.parryChance;
+            dst.memoryWeight = src.memoryWeight;
         }
     }
 }
